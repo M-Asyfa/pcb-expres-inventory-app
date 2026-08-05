@@ -1,0 +1,68 @@
+/* PCB Jogja SCADA - Design Tokens - Three Layer (Previous beige theme) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;600&display=swap');
+
+:root {
+  /* Primitive - SCADA Navy */
+  --primitive-scada-900: #0F1E35;
+  --primitive-scada-800: #162a4a;
+  --primitive-scada-700: #1A2E4F;
+  --primitive-beige-50: #FFFBF2;
+  --primitive-beige-100: #FAF6EE;
+  --primitive-beige-200: #F6EFE0;
+  --primitive-beige-300: #F3EBD9;
+  --primitive-beige-400: #E8DDC7;
+  --primitive-beige-500: #F0E6D2;
+  --primitive-slate-900: #0F172A;
+  --primitive-slate-500: #64748B;
+  --primitive-blue-100: #DBEAFE;
+  --primitive-blue-200: #BFDBFE;
+  --primitive-blue-800: #1E40AF;
+  --primitive-green-100: #D1FAE5;
+  --primitive-green-200: #A7F3D0;
+  --primitive-green-800: #065F46;
+  --primitive-amber-100: #FDE68A;
+  --primitive-white: #FFFFFF;
+
+  /* Semantic */
+  --color-background: var(--primitive-beige-100);
+  --color-background-secondary: var(--primitive-beige-200);
+  --color-foreground: var(--primitive-slate-900);
+  --color-foreground-muted: var(--primitive-slate-500);
+  --color-primary: var(--primitive-scada-900);
+  --color-primary-hover: var(--primitive-scada-800);
+  --color-primary-foreground: var(--primitive-white);
+  --color-border: var(--primitive-beige-500);
+  --color-border-light: var(--primitive-beige-400);
+  --color-card: var(--primitive-white);
+  --color-success: #059669;
+  --color-warning: #F59E0B;
+  --color-destructive: #DC2626;
+
+  /* Radius */
+  --radius-card: 20px;
+  --radius-stat: 22px;
+  --radius-pill: 9999px;
+  --radius-input: 12px;
+  --radius-btn: 12px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 20px rgba(0,0,0,0.04);
+  --shadow-card-hover: 0 8px 24px rgba(0,0,0,0.06);
+  --shadow-dark-card: 0 8px 24px rgba(15,30,53,0.25);
+
+  /* Typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
+
+  /* Spacing */
+  --sidebar-width: 280px;
+  --header-height: 64px;
+
+  /* Component */
+  --sidebar-bg: var(--primitive-beige-200);
+  --sidebar-dark-bg: var(--primitive-scada-900);
+  --header-bg: var(--primitive-white);
+  --stat-blob-mint: var(--primitive-green-200);
+  --stat-blob-blue: var(--primitive-blue-200);
+  --stat-blob-amber: var(--primitive-amber-100);
+}
