@@ -258,7 +258,7 @@
               <UiButton v-if="photoModalProduct.foto" variant="secondary" size="sm" @click="deletePhotoFromModal" class="h-10 flex-1 lg:flex-none">🗑️ Hapus foto</UiButton>
               <UiButton variant="secondary" size="sm" @click="closePhotoModal" class="h-10 flex-1 lg:flex-none">Tutup</UiButton>
             </div>
-            <div class="text-[10px] text-gray-500">Unggah gambar (JPG/PNG/WEBP max 5MB).</div>
+            <div class="text-[10px] text-gray-500">Unggah foto (JPG/PNG/WEBP max 5MB).</div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-2 text-[11px] mt-2">
               <div class="bg-[#FFFBF2] rounded-[8px] px-2.5 py-2 border border-[#F0E6D2]"><span class="text-gray-500">Stock:</span> <span class="font-bold">{{ photoModalProduct.stock }} / {{ photoModalProduct.batas_stock }}</span></div>
               <div class="bg-[#FFFBF2] rounded-[8px] px-2.5 py-2 border border-[#F0E6D2]"><span class="text-gray-500">Lokasi:</span> <span class="font-bold">Box {{ photoModalProduct.nomor_box }} Laci {{ photoModalProduct.nomor_laci }}</span></div>
