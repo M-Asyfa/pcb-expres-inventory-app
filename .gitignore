@@ -41,6 +41,9 @@ data/
 database/inventory_pcbexpressjogja.sql
 # Keep schema as reference
 !database/schema.sql
+# Product photos uploads (keep folder but ignore files)
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep
 
 # Docker
 .docker/

@@ -41,13 +41,14 @@
       </CardContent>
     </Card>
 
-    <!-- Table exactly like picture: ID, Name, Keterangan, Kategori, No Box, No Laci, Harga (Rp), Stock Total, Total Stock Value (Rp), Stock, Aksi -->
+    <!-- Table with Foto column -->
     <Card>
       <CardContent class="p-0 overflow-x-auto">
         <table class="w-full text-[11px]">
           <thead class="border-b border-[#E8DDC7] bg-[#FFFBF2]">
             <tr class="text-[11px] font-bold text-[#0F172A] text-left tracking-wide">
               <th class="py-3 px-3 cursor-pointer whitespace-nowrap" @click="sortBy('id')">ID <span class="text-[#94A3B8]">▲</span></th>
+              <th class="py-3 whitespace-nowrap">Foto</th>
               <th class="py-3 cursor-pointer whitespace-nowrap" @click="sortBy('nama')">Name <span class="text-[#E8DDC7]">↕</span></th>
               <th class="py-3 cursor-pointer whitespace-nowrap" @click="sortBy('keterangan')">Keterangan <span class="text-[#E8DDC7]">↕</span></th>
               <th class="py-3 cursor-pointer whitespace-nowrap" @click="sortBy('kategori')">Kategori <span class="text-[#E8DDC7]">↕</span></th>
@@ -63,6 +64,14 @@
           <tbody>
             <tr v-for="p in sortedProducts" :key="p.id" class="border-b border-[#F5EFE4] hover:bg-[#FFFBF2] transition" :class="{'bg-red-50/40': p.stock <= p.batas_stock}">
               <td class="py-3 px-3 font-mono text-[11px]">{{ p.id }}</td>
+              <td class="py-2">
+                <div v-if="getPhotoUrl(p.foto)" class="w-10 h-10 rounded-[8px] overflow-hidden border border-[#E8DDC7] bg-white cursor-pointer hover:ring-2 hover:ring-[#0F1E35]/20 transition" @click="openPhotoModal(p)">
+                  <img :src="getPhotoUrl(p.foto)" :alt="p.nama" class="w-full h-full object-cover" loading="lazy" @error="onImgError" />
+                </div>
+                <div v-else class="w-10 h-10 rounded-[8px] border border-dashed border-[#E8DDC7] bg-[#FFFBF2] flex items-center justify-center text-[14px] cursor-pointer hover:bg-white transition" @click="openPhotoModal(p)" title="Tidak ada foto - klik untuk upload">
+                  📷
+                </div>
+              </td>
               <td class="font-semibold max-w-[180px] truncate" :title="p.nama">{{ p.nama }}</td>
               <td class="max-w-[200px] truncate text-gray-600" :title="p.keterangan_barang">{{ p.keterangan_barang }}</td>
               <td><span class="px-2 py-1 bg-[#DBEAFE] text-[#1E40AF] rounded-full text-[10px] font-bold">{{ p.kategori }}</span></td>
@@ -111,7 +120,7 @@
       </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Create/Edit Modal with Photo -->
     <div v-if="showCreate || editing" class="fixed inset-0 bg-[#0F1E35]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <Card class="w-full max-w-lg max-h-[90vh] overflow-auto">
         <CardHeader><CardTitle>{{ editing ? 'Edit Barang' : 'Tambah Barang' }}</CardTitle><CardDescription>data_barang • Bahasa Indonesia</CardDescription></CardHeader>
@@ -133,15 +142,36 @@
               <div><label class="text-[11px] font-bold">Batas Stock</label><UiInput v-model="form.batas_stock" type="number" /></div>
               <div><label class="text-[11px] font-bold">ID</label><input :value="editing?editing.id:'auto'" disabled class="h-10 rounded-[12px] border bg-[#FFFBF2] px-3 text-sm w-full" /></div>
             </div>
+
+            <!-- Foto upload section -->
+            <div class="border border-[var(--color-border)] rounded-[12px] p-3 bg-[#FFFBF2]/50">
+              <label class="text-[11px] font-bold block mb-2">Foto Produk (JPG/PNG/WEBP max 5MB)</label>
+              <div class="flex gap-3 items-start">
+                <div class="w-[96px] h-[96px] rounded-[12px] border border-[#E8DDC7] bg-white overflow-hidden flex items-center justify-center">
+                  <img v-if="photoPreview" :src="photoPreview" class="w-full h-full object-cover" />
+                  <span v-else class="text-gray-400 text-xl">📷</span>
+                </div>
+                <div class="flex-1 space-y-2">
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="onPhotoSelect" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-[8px] file:border file:border-[#E8DDC7] file:bg-white file:text-[11px] file:font-bold hover:file:bg-[#F3EBD9]" />
+                  <p class="text-[10px] text-gray-500">Foto akan di-upload setelah Simpan. Klik list foto untuk lihat besar.</p>
+                  <div class="flex gap-2">
+                    <button v-if="photoPreview" type="button" @click="clearPhoto" class="text-[10px] px-2 py-1 bg-white border border-[#E8DDC7] rounded-[6px] hover:bg-red-50 hover:text-red-600">Hapus preview</button>
+                    <button v-if="editing && editing.foto" type="button" @click="deleteExistingPhoto" class="text-[10px] px-2 py-1 bg-white border border-red-200 text-red-600 rounded-[6px] hover:bg-red-50">Hapus foto tersimpan</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="flex justify-end gap-2 pt-2">
-              <UiButton variant="secondary" @click="closeModal">Batal</UiButton>
-              <UiButton type="submit">Simpan</UiButton>
+              <UiButton variant="secondary" @click="closeModal" type="button">Batal</UiButton>
+              <UiButton type="submit" :disabled="saving">{{ saving ? 'Menyimpan...' : 'Simpan' }}</UiButton>
             </div>
           </form>
         </CardContent>
       </Card>
     </div>
 
+    <!-- Stock adjust modal -->
     <div v-if="stockProduct" class="fixed inset-0 bg-[#0F1E35]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <Card class="w-full max-w-md">
         <CardHeader><CardTitle>Adjust Stock: {{ stockProduct.nama }}</CardTitle><CardDescription>No Box {{ stockProduct.nomor_box }} No Laci {{ stockProduct.nomor_laci }} • Stock {{ stockProduct.stock }}</CardDescription></CardHeader>
@@ -152,8 +182,50 @@
             </select>
             <UiInput v-model="stockForm.quantity" type="number" placeholder="Qty" />
             <UiInput v-model="stockForm.reason" placeholder="Alasan" />
-            <div class="flex justify-end gap-2"><UiButton variant="secondary" @click="stockProduct=null">Batal</UiButton><UiButton type="submit">Update</UiButton></div>
+            <div class="flex justify-end gap-2"><UiButton variant="secondary" @click="stockProduct=null" type="button">Batal</UiButton><UiButton type="submit">Update</UiButton></div>
           </form>
+        </CardContent>
+      </Card>
+    </div>
+
+    <!-- Photo Modal -->
+    <div v-if="photoModalProduct" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[60]" @click.self="closePhotoModal">
+      <Card class="w-full max-w-3xl max-h-[90vh] overflow-auto bg-white">
+        <CardHeader class="flex flex-row justify-between items-center">
+          <div>
+            <CardTitle class="text-[16px]">{{ photoModalProduct.nama }}</CardTitle>
+            <CardDescription>ID {{ photoModalProduct.id }} • Box {{ photoModalProduct.nomor_box }} Laci {{ photoModalProduct.nomor_laci }} • {{ photoModalProduct.kategori }} • Rp{{ Number(photoModalProduct.harga).toLocaleString('id-ID') }}</CardDescription>
+          </div>
+          <div class="flex gap-2">
+            <UiButton variant="secondary" size="sm" @click="closePhotoModal">✕ Tutup</UiButton>
+          </div>
+        </CardHeader>
+        <CardContent class="p-0">
+          <div v-if="getPhotoUrl(photoModalProduct.foto)" class="bg-[#FAF6EE] flex items-center justify-center p-6 min-h-[300px]">
+            <img :src="getPhotoUrl(photoModalProduct.foto)" :alt="photoModalProduct.nama" class="max-w-full max-h-[70vh] object-contain rounded-[12px] shadow-sm" />
+          </div>
+          <div v-else class="py-20 text-center bg-[#FFFBF2]">
+            <div class="text-5xl mb-3">📷</div>
+            <div class="text-sm text-gray-500">Tidak ada foto untuk barang ini</div>
+            <div class="text-[11px] text-gray-400 mt-1">Gunakan tombol Edit untuk upload foto</div>
+            <div class="mt-4 flex justify-center gap-2">
+              <UiButton size="sm" @click="editFromPhotoModal">Upload Foto</UiButton>
+              <UiButton variant="secondary" size="sm" @click="closePhotoModal">Tutup</UiButton>
+            </div>
+          </div>
+          <div class="p-4 border-t border-[#F0E6D2] bg-white">
+            <div class="text-[11px] font-bold mb-1">Keterangan</div>
+            <div class="text-[12px] text-gray-700 whitespace-pre-wrap">{{ photoModalProduct.keterangan_barang || '-' }}</div>
+            <div class="mt-3 grid grid-cols-3 gap-3 text-[11px]">
+              <div><span class="text-gray-500">Stock:</span> <span class="font-bold">{{ photoModalProduct.stock }} / {{ photoModalProduct.batas_stock }}</span></div>
+              <div><span class="text-gray-500">Lokasi:</span> <span class="font-bold">Box {{ photoModalProduct.nomor_box }} Laci {{ photoModalProduct.nomor_laci }}</span></div>
+              <div><span class="text-gray-500">Total Value:</span> <span class="font-bold">Rp{{ Number(photoModalProduct.harga * photoModalProduct.stock).toLocaleString('id-ID') }}</span></div>
+            </div>
+            <div v-if="getPhotoUrl(photoModalProduct.foto)" class="mt-3 flex gap-2">
+              <a :href="getPhotoUrl(photoModalProduct.foto)" target="_blank" class="text-[11px] px-3 py-1.5 bg-white border border-[#E8DDC7] rounded-[8px] hover:bg-[#F3EBD9] inline-flex">🔗 Buka di tab baru</a>
+              <button @click="deletePhotoFromModal" class="text-[11px] px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-[8px] hover:bg-red-50">🗑️ Hapus foto</button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -162,7 +234,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { productService, categoryService, locationService } from '../services/api'
+import { productService, categoryService, locationService, getPhotoUrl } from '../services/api'
 import Card from '../components/ui/Card.vue'
 import CardHeader from '../components/ui/CardHeader.vue'
 import CardTitle from '../components/ui/CardTitle.vue'
@@ -186,6 +258,12 @@ const meta = ref({ total:0, page:1, per_page:20, total_pages:1 })
 const stockChanging = reactive({})
 const sortKey = ref('id')
 const sortAsc = ref(true)
+const saving = ref(false)
+
+// Photo handling
+const photoFile = ref(null)
+const photoPreview = ref(null)
+const photoModalProduct = ref(null)
 
 const form = reactive({ nama:'', kategori:'', keterangan_barang:'', nomor_box:'', nomor_laci:'', harga:0, stock:0, batas_stock:10 })
 const stockForm = reactive({ type:'in', quantity:1, reason:'' })
@@ -225,19 +303,10 @@ const fetchMeta = async () => {
 onMounted(()=>{fetchProducts(); fetchMeta()})
 
 const sortedProducts = computed(()=>{
-  // Server already sorts globally, but keep client fallback for columns not yet server-sorted
   let list = [...products.value]
-  // If server sorting active for these keys, skip client re-sort to preserve server order
   const serverSortedKeys = ['id','nama','kategori','box','nomor_box','laci','nomor_laci','harga','stock','totalValue','total_value','updated','batas_stock','keterangan']
   if (serverSortedKeys.includes(sortKey.value)) {
-    // For keys that server handles, we trust server order (already sorted by fetchProducts)
-    // But still apply client sort as secondary if user toggles same column quickly before fetch completes
-    // We'll sort only if list length < perPage (small) to avoid flicker, else return as-is
-    if (list.length <= perPage.value) {
-      // do client sort for immediate feedback
-    } else {
-      return list
-    }
+    if (list.length > perPage.value) return list
   }
   if (sortKey.value==='totalValue' || sortKey.value==='total_value') {
     list.sort((a,b)=> sortAsc.value ? (a.harga*a.stock)-(b.harga*b.stock) : (b.harga*b.stock)-(a.harga*a.stock))
@@ -266,7 +335,6 @@ const sortedProducts = computed(()=>{
 const sortBy = (key) => {
   if (sortKey.value===key) sortAsc.value=!sortAsc.value
   else { sortKey.value=key; sortAsc.value=true }
-  // Trigger server-side sort for global sorting
   fetchProducts()
 }
 
@@ -276,10 +344,79 @@ const visiblePages = computed(()=>{
   const pages=[1]; if(cur>3) pages.push('...'); for(let i=Math.max(2,cur-1); i<=Math.min(total-1,cur+1); i++) pages.push(i); if(cur<total-2) pages.push('...'); pages.push(total); return pages
 })
 const goPage = (p)=>{ if(p<1||p>meta.value.total_pages) return; meta.value.page=p; fetchProducts(); window.scrollTo({top:0,behavior:'smooth'}) }
-const closeModal = ()=>{ showCreate.value=false; editing.value=null; Object.assign(form,{nama:'',kategori:'',keterangan_barang:'',nomor_box:'',nomor_laci:'',harga:0,stock:0,batas_stock:10}) }
-const saveProduct = async () => { try{ if(editing.value) await productService.update(editing.value.id,form); else await productService.create(form); closeModal(); fetchProducts(); fetchMeta() } catch(e){ alert(e.response?.data?.error||e.message) } }
-const editProduct = (p)=>{ editing.value=p; Object.assign(form,{nama:p.nama,kategori:p.kategori,keterangan_barang:p.keterangan_barang,nomor_box:p.nomor_box,nomor_laci:p.nomor_laci,harga:p.harga,stock:p.stock,batas_stock:p.batas_stock}) }
-const deleteProduct = async (id)=>{ if(!confirm('Hapus barang ini?')) return; await productService.delete(id); fetchProducts() }
+
+const clearPhoto = () => { photoFile.value=null; photoPreview.value=null }
+const onPhotoSelect = (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  if (file.size > 5*1024*1024) { alert('File terlalu besar max 5MB'); e.target.value=''; return }
+  photoFile.value = file
+  const reader = new FileReader()
+  reader.onload = (ev) => { photoPreview.value = ev.target.result }
+  reader.readAsDataURL(file)
+}
+
+const closeModal = ()=>{
+  showCreate.value=false
+  editing.value=null
+  Object.assign(form,{nama:'',kategori:'',keterangan_barang:'',nomor_box:'',nomor_laci:'',harga:0,stock:0,batas_stock:10})
+  clearPhoto()
+}
+
+const saveProduct = async () => {
+  if (saving.value) return
+  saving.value=true
+  try{
+    let savedId = editing.value?.id
+    let savedProduct
+    if(editing.value) {
+      await productService.update(editing.value.id,form)
+      savedId = editing.value.id
+      savedProduct = { ...editing.value, ...form }
+    } else {
+      const res = await productService.create(form)
+      savedId = res.data.data.id
+      savedProduct = res.data.data
+    }
+    if (photoFile.value && savedId) {
+      try {
+        const upRes = await productService.uploadPhoto(savedId, photoFile.value)
+        savedProduct = upRes.data.data
+      } catch(e) {
+        alert('Barang tersimpan tapi foto gagal upload: ' + (e.response?.data?.error||e.message))
+      }
+    }
+    closeModal()
+    fetchProducts()
+    fetchMeta()
+  } catch(e){ alert(e.response?.data?.error||e.message) }
+  finally { saving.value=false }
+}
+
+const editProduct = (p)=>{
+  editing.value=p
+  Object.assign(form,{nama:p.nama,kategori:p.kategori,keterangan_barang:p.keterangan_barang,nomor_box:p.nomor_box,nomor_laci:p.nomor_laci,harga:p.harga,stock:p.stock,batas_stock:p.batas_stock})
+  photoFile.value=null
+  photoPreview.value = p.foto ? getPhotoUrl(p.foto) : null
+}
+
+const deleteProduct = async (id)=>{
+  if(!confirm('Hapus barang ini?')) return
+  try { await productService.delete(id); fetchProducts() } catch(e){ alert(e.response?.data?.error||e.message) }
+}
+
+const deleteExistingPhoto = async () => {
+  if (!editing.value?.id) return
+  if (!confirm('Hapus foto tersimpan? File akan dihapus permanen.')) return
+  try {
+    await productService.deletePhoto(editing.value.id)
+    alert('Foto dihapus')
+    editing.value.foto = null
+    photoPreview.value = null
+    fetchProducts()
+  } catch(e){ alert(e.response?.data?.error||e.message) }
+}
+
 const openStockModal = async (p)=>{ const res=await productService.getOne(p.id); stockProduct.value=res.data.data; stockForm.quantity=1; stockForm.type='in'; stockForm.reason='' }
 const submitStock = async ()=>{ try{ await productService.adjustStock(stockProduct.value.id,stockForm); stockProduct.value=null; fetchProducts() } catch(e){ alert(e.response?.data?.error||e.message) } }
 
@@ -306,4 +443,25 @@ const onImportFile = async (e) => {
   try{ const res=await productService.importCsv(file); alert(res.data.message); fetchProducts() } catch(err){ alert(err.response?.data?.error||err.message) }
   e.target.value=''
 }
+
+// Photo modal logic
+const openPhotoModal = (p) => { photoModalProduct.value = p }
+const closePhotoModal = () => { photoModalProduct.value = null }
+const editFromPhotoModal = () => {
+  const p = photoModalProduct.value
+  closePhotoModal()
+  if (p) editProduct(p)
+}
+const deletePhotoFromModal = async () => {
+  if (!photoModalProduct.value) return
+  if (!confirm('Hapus foto ini?')) return
+  try {
+    await productService.deletePhoto(photoModalProduct.value.id)
+    alert('Foto dihapus')
+    photoModalProduct.value.foto = null
+    fetchProducts()
+    closePhotoModal()
+  } catch(e){ alert(e.response?.data?.error||e.message) }
+}
+const onImgError = (e) => { e.target.style.display='none' }
 </script>

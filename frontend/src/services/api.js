@@ -40,6 +40,12 @@ export const productService = {
   update(id, data) { return api.put(`/products/${id}`, data) },
   delete(id) { return api.delete(`/products/${id}`) },
   adjustStock(id, data) { return api.post(`/products/${id}/stock`, data) },
+  uploadPhoto(id, file) {
+    const fd = new FormData()
+    fd.append('photo', file)
+    return api.post(`/products/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  deletePhoto(id) { return api.delete(`/products/${id}/photo`) },
   getStats() { return api.get('/products/stats') },
   getLowStock() { return api.get('/products/low-stock') },
   getCategoriesStats() { return api.get('/products/stats/categories') },
@@ -51,6 +57,14 @@ export const productService = {
     fd.append('file', file)
     return api.post('/import/csv', fd, { headers: { 'Content-Type': 'multipart/form-data' } }) 
   }
+}
+
+export const getPhotoUrl = (foto) => {
+  if (!foto) return null
+  if (foto.startsWith('http')) return foto
+  const base = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api\/?$/, '')
+  const clean = foto.replace(/^\//, '')
+  return `${base}/${clean}`
 }
 
 export const categoryService = {

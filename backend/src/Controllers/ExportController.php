@@ -52,12 +52,13 @@ class ExportController {
         header('Content-Disposition: attachment; filename="inventory_pcbexpressjogja_' . date('Y-m-d_His') . '.csv"');
         $out = fopen('php://output', 'w');
         fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM
-        fputcsv($out, ['id','updated','nama','kategori','keterangan_barang','nomor_box','nomor_laci','harga','stock','batas_stock','total_value']);
+        fputcsv($out, ['id','updated','nama','kategori','keterangan_barang','nomor_box','nomor_laci','harga','stock','batas_stock','total_value','foto']);
         foreach ($rows as $r) {
             fputcsv($out, [
                 $r['id'], $r['updated'], $r['nama'], $r['kategori'], $r['keterangan_barang'],
                 $r['nomor_box'], $r['nomor_laci'], $r['harga'], $r['stock'], $r['batas_stock'],
-                $r['harga'] * $r['stock']
+                $r['harga'] * $r['stock'],
+                $r['foto'] ?? ''
             ]);
         }
         fclose($out);

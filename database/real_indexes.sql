@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS `data_barang` (
   `harga` int(11) NOT NULL DEFAULT 0,
   `stock` int(11) NOT NULL DEFAULT 0,
   `batas_stock` int(11) NOT NULL DEFAULT 10,
+  `foto` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_data_barang_kategori` (`kategori`(50)),
   KEY `idx_data_barang_nomor_box` (`nomor_box`),
@@ -24,6 +25,9 @@ CREATE TABLE IF NOT EXISTS `data_barang` (
   KEY `idx_data_barang_stock` (`stock`),
   KEY `idx_data_barang_nama` (`nama`(100))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Migration for existing installations: add foto column if missing (MariaDB 11 supports IF NOT EXISTS)
+ALTER TABLE `data_barang` ADD COLUMN IF NOT EXISTS `foto` varchar(500) DEFAULT NULL;
 
 CREATE TABLE IF NOT EXISTS `kategori` (
   `kategori` varchar(200) NOT NULL,

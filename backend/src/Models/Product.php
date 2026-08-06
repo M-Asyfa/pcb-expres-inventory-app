@@ -119,15 +119,21 @@ class Product {
 
     public static function create(array $data): int {
         $pdo = Database::getConnection();
-        $sql = "INSERT INTO data_barang (nama, kategori, keterangan_barang, nomor_box, nomor_laci, harga, stock, batas_stock)
-                VALUES (:nama, :kategori, :keterangan_barang, :nomor_box, :nomor_laci, :harga, :stock, :batas_stock)";
+        // Include foto if column exists
+        $hasFoto = self::hasFotoColumn();
+        if ($hasFoto) {
+            $sql = "INSERT INTO data_barang (nama, kategori, keterangan_barang, nomor_box, nomor_laci, harga, stock, batas_stock, foto)
+                    VALUES (:nama, :kategori, :keterangan_barang, :nomor_box, :nomor_laci, :harga, :stock, :batas_stock, :foto)";
+        } else {
+            $sql = "INSERT INTO data_barang (nama, kategori, keterangan_barang, nomor_box, nomor_laci, harga, stock, batas_stock)
+                    VALUES (:nama, :kategori, :keterangan_barang, :nomor_box, :nomor_laci, :harga, :stock, :batas_stock)";
+        }
         $stmt = $pdo->prepare($sql);
-        // Normalize box/laci - trim spaces like "84 " seen in real data
         $box = isset($data['nomor_box']) ? trim((string)$data['nomor_box']) : '0';
         $laci = isset($data['nomor_laci']) ? trim((string)$data['nomor_laci']) : '1';
         if ($box === '') $box = '0';
         if ($laci === '') $laci = '1';
-        $stmt->execute([
+        $params = [
             'nama' => trim($data['nama']),
             'kategori' => isset($data['kategori']) ? trim($data['kategori']) : '',
             'keterangan_barang' => isset($data['keterangan_barang']) ? trim($data['keterangan_barang']) : (trim($data['nama']) ?? ''),
@@ -136,7 +142,9 @@ class Product {
             'harga' => $data['harga'] ?? 0,
             'stock' => $data['stock'] ?? 0,
             'batas_stock' => $data['batas_stock'] ?? 10
-        ]);
+        ];
+        if ($hasFoto) $params['foto'] = $data['foto'] ?? null;
+        $stmt->execute($params);
         $id = (int)$pdo->lastInsertId();
 
         // Ensure kategori exists in kategori table
@@ -149,13 +157,55 @@ class Product {
         return $id;
     }
 
+    public static function hasFotoColumn(): bool {
+        try {
+            $pdo = Database::getConnection();
+            $stmt = $pdo->query("SHOW COLUMNS FROM data_barang LIKE 'foto'");
+            $exists = $stmt && $stmt->fetch() !== false;
+            if (!$exists) {
+                // Auto-migrate for existing DBs that were created before foto feature
+                try {
+                    $pdo->exec("ALTER TABLE data_barang ADD COLUMN IF NOT EXISTS foto VARCHAR(500) DEFAULT NULL");
+                    // Re-check after attempt
+                    $stmt2 = $pdo->query("SHOW COLUMNS FROM data_barang LIKE 'foto'");
+                    return $stmt2 && $stmt2->fetch() !== false;
+                } catch (\Exception $e2) {
+                    // Try without IF NOT EXISTS for older MariaDB
+                    try {
+                        $pdo->exec("ALTER TABLE data_barang ADD COLUMN foto VARCHAR(500) DEFAULT NULL");
+                        return true;
+                    } catch (\Exception $e3) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    public static function ensureFotoColumn(): bool {
+        return self::hasFotoColumn();
+    }
+
+    public static function updateFoto(int $id, ?string $path): bool {
+        $pdo = Database::getConnection();
+        if (!self::hasFotoColumn()) return false;
+        $stmt = $pdo->prepare("UPDATE data_barang SET foto = :foto WHERE id = :id");
+        return $stmt->execute(['foto'=>$path,'id'=>$id]);
+    }
+
     public static function update(int $id, array $data): bool {
         $pdo = Database::getConnection();
         $fields = [];
         $params = ['id' => $id];
-        $allowed = ['nama','kategori','keterangan_barang','nomor_box','nomor_laci','harga','stock','batas_stock'];
+        $allowed = ['nama','kategori','keterangan_barang','nomor_box','nomor_laci','harga','stock','batas_stock','foto'];
         
+        // Only allow foto if column exists
+        $hasFoto = self::hasFotoColumn();
         foreach ($allowed as $field) {
+            if ($field === 'foto' && !$hasFoto) continue;
             if (array_key_exists($field, $data)) {
                 $fields[] = "$field = :$field";
                 $params[$field] = $data[$field];

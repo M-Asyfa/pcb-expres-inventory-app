@@ -50,6 +50,7 @@ services:
         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer;
       fi &&
       cd /var/www/html && composer install --no-interaction --no-progress || true &&
+      mkdir -p /var/www/html/public/uploads && chown -R www-data:www-data /var/www/html/public/uploads && chmod -R 775 /var/www/html/public/uploads &&
       apache2-foreground
       "
 

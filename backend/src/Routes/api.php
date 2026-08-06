@@ -13,7 +13,7 @@ $router->get('/api/health', function() {
 });
 
 // Products (data_barang)
-$router->get('/api/products', [ProductController::class, 'index']); // supports ?search=&kategori=&nomor_box=&low_stock=
+$router->get('/api/products', [ProductController::class, 'index']); // supports ?search=&kategori=&nomor_box=&low_stock=&sort_by=&sort_dir=
 $router->get('/api/products/stats', [ProductController::class, 'stats']);
 $router->get('/api/products/stats/categories', [ProductController::class, 'categoriesStats']);
 $router->get('/api/products/stats/boxes', [ProductController::class, 'boxesStats']);
@@ -23,6 +23,8 @@ $router->post('/api/products', [ProductController::class, 'store']);
 $router->put('/api/products/{id}', [ProductController::class, 'update']);
 $router->delete('/api/products/{id}', [ProductController::class, 'destroy']);
 $router->post('/api/products/{id}/stock', [ProductController::class, 'adjustStock']);
+$router->post('/api/products/{id}/photo', [ProductController::class, 'uploadPhoto']);
+$router->delete('/api/products/{id}/photo', [ProductController::class, 'deletePhoto']);
 
 // Categories (kategori table + aggregated from data_barang)
 $router->get('/api/categories', [CategoryController::class, 'index']);

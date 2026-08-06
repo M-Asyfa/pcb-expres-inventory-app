@@ -155,9 +155,116 @@ class ProductController {
 
     public function destroy(array $params): void {
         $id = (int)$params['id'];
-        if (!Product::find($id)) Response::error('Barang not found', 404);
+        $product = Product::find($id);
+        if (!$product) Response::error('Barang not found', 404);
+        // Delete associated photo file if exists
+        if (!empty($product['foto'])) {
+            $this->deletePhotoFile($product['foto']);
+        }
         Product::delete($id);
         Response::json(['message' => 'Barang deleted']);
+    }
+
+    private function getUploadDir(): string {
+        $dir = __DIR__ . '/../../public/uploads';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        return $dir;
+    }
+
+    private function deletePhotoFile(string $path): void {
+        // $path like uploads/filename or /uploads/filename or full url
+        if (str_starts_with($path, 'http')) return;
+        $path = ltrim($path, '/');
+        // Only allow uploads/ prefix for safety
+        if (!str_starts_with($path, 'uploads/')) {
+            // Legacy may store just filename
+            $path = 'uploads/' . basename($path);
+        }
+        $full = __DIR__ . '/../../public/' . $path;
+        $realUpload = realpath($this->getUploadDir());
+        $realTarget = realpath(dirname($full)) ?: dirname($full);
+        // Prevent directory traversal - must be inside uploads
+        if ($realUpload && str_contains($realTarget, $realUpload) || str_starts_with($realTarget, $realUpload)) {
+            if (file_exists($full) && is_file($full)) {
+                @unlink($full);
+            }
+        } else {
+            // If realpath fails but we have uploads prefix, try direct unlink with basename check
+            if (file_exists($full) && is_file($full)) {
+                @unlink($full);
+            }
+        }
+    }
+
+    public function uploadPhoto(array $params): void {
+        $id = (int)$params['id'];
+        $product = Product::find($id);
+        if (!$product) Response::error('Barang not found', 404);
+
+        // Auto-ensure foto column exists for old DBs
+        if (!Product::ensureFotoColumn()) {
+            Response::error('Foto column missing and auto-migration failed. Please run: ALTER TABLE data_barang ADD COLUMN foto VARCHAR(500) DEFAULT NULL', 500);
+        }
+
+        if (!isset($_FILES['photo']) && !isset($_FILES['foto'])) {
+            Response::error('No file uploaded (field name must be photo)', 400);
+        }
+        $file = $_FILES['photo'] ?? $_FILES['foto'];
+
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            Response::error('Upload error: ' . $file['error'], 400);
+        }
+        if ($file['size'] > 5 * 1024 * 1024) {
+            Response::error('File too large max 5MB', 400);
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        $allowedMimes = ['image/jpeg','image/png','image/webp','image/gif','image/jpg'];
+        if (!in_array($mime, $allowedMimes, true)) {
+            Response::error('Only JPG, PNG, WEBP, GIF allowed. Got: ' . $mime, 400);
+        }
+
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $allowedExt = ['jpg','jpeg','png','webp','gif'];
+        if (!in_array($ext, $allowedExt, true)) {
+            // Derive from mime
+            $map = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif'];
+            $ext = $map[$mime] ?? 'jpg';
+        }
+
+        $uploadDir = $this->getUploadDir();
+        $filename = sprintf('product_%d_%s_%s.%s', $id, date('YmdHis'), bin2hex(random_bytes(4)), $ext);
+        $dest = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+
+        if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            Response::error('Failed to move uploaded file', 500);
+        }
+
+        // Delete old photo if exists
+        if (!empty($product['foto'])) {
+            $this->deletePhotoFile($product['foto']);
+        }
+
+        $relativePath = 'uploads/' . $filename;
+        Product::updateFoto($id, $relativePath);
+
+        Response::json(['data' => Product::find($id), 'message' => 'Photo uploaded', 'foto' => $relativePath]);
+    }
+
+    public function deletePhoto(array $params): void {
+        $id = (int)$params['id'];
+        $product = Product::find($id);
+        if (!$product) Response::error('Barang not found', 404);
+        if (empty($product['foto'])) {
+            Response::error('No photo to delete', 404);
+        }
+        $this->deletePhotoFile($product['foto']);
+        Product::updateFoto($id, null);
+        Response::json(['data' => Product::find($id), 'message' => 'Photo deleted']);
     }
 
     public function adjustStock(array $params): void {
