@@ -11,45 +11,44 @@ use App\Config\Database;
 class Location {
     public static function all(): array {
         $pdo = Database::getConnection();
-        // Return distinct box+laci combinations as locations
         $sql = "SELECT 
-                    CONCAT(nomor_box, '-', nomor_laci) as id,
-                    nomor_box,
-                    nomor_laci,
-                    CONCAT('Box ', nomor_box, ' Laci ', nomor_laci) as name,
+                    CONCAT(TRIM(nomor_box), '-', TRIM(nomor_laci)) as id,
+                    TRIM(nomor_box) as nomor_box,
+                    TRIM(nomor_laci) as nomor_laci,
+                    CONCAT('Box ', TRIM(nomor_box), ' Laci ', TRIM(nomor_laci)) as name,
                     COUNT(*) as product_count,
                     SUM(stock) as total_stock
                 FROM data_barang
-                GROUP BY nomor_box, nomor_laci
-                ORDER BY CAST(nomor_box AS UNSIGNED), CAST(nomor_laci AS UNSIGNED)";
+                GROUP BY TRIM(nomor_box), TRIM(nomor_laci)
+                ORDER BY CAST(TRIM(nomor_box) AS UNSIGNED), CAST(TRIM(nomor_laci) AS UNSIGNED)";
         return $pdo->query($sql)->fetchAll();
     }
 
     public static function getBoxes(): array {
         $pdo = Database::getConnection();
-        return $pdo->query("SELECT nomor_box as id, nomor_box as name, nomor_box, COUNT(*) as product_count FROM data_barang GROUP BY nomor_box ORDER BY CAST(nomor_box AS UNSIGNED)")->fetchAll();
+        return $pdo->query("SELECT TRIM(nomor_box) as id, TRIM(nomor_box) as name, TRIM(nomor_box) as nomor_box, COUNT(*) as product_count FROM data_barang GROUP BY TRIM(nomor_box) ORDER BY CAST(TRIM(nomor_box) AS UNSIGNED)")->fetchAll();
     }
 
     public static function getLaciByBox(string $box): array {
         $pdo = Database::getConnection();
-        $stmt = $pdo->prepare("SELECT nomor_laci as id, nomor_laci as name, nomor_laci, COUNT(*) as product_count FROM data_barang WHERE nomor_box = :box GROUP BY nomor_laci ORDER BY CAST(nomor_laci AS UNSIGNED)");
+        $box = trim($box);
+        $stmt = $pdo->prepare("SELECT TRIM(nomor_laci) as id, TRIM(nomor_laci) as name, TRIM(nomor_laci) as nomor_laci, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box GROUP BY TRIM(nomor_laci) ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED)");
         $stmt->execute(['box'=>$box]);
         return $stmt->fetchAll();
     }
 
     public static function find(string $id): ?array {
-        // id is like "1-2" (box-laci)
+        $id = trim($id);
         $pdo = Database::getConnection();
         $parts = explode('-', $id);
         if (count($parts) >= 2) {
-            $box = $parts[0];
-            $laci = $parts[1];
-            $stmt = $pdo->prepare("SELECT CONCAT(nomor_box,'-',nomor_laci) as id, nomor_box, nomor_laci, CONCAT('Box ',nomor_box,' Laci ',nomor_laci) as name, COUNT(*) as product_count FROM data_barang WHERE nomor_box = :box AND nomor_laci = :laci GROUP BY nomor_box, nomor_laci");
+            $box = trim($parts[0]);
+            $laci = trim($parts[1]);
+            $stmt = $pdo->prepare("SELECT CONCAT(TRIM(nomor_box),'-',TRIM(nomor_laci)) as id, TRIM(nomor_box) as nomor_box, TRIM(nomor_laci) as nomor_laci, CONCAT('Box ',TRIM(nomor_box),' Laci ',TRIM(nomor_laci)) as name, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box AND TRIM(nomor_laci) = :laci GROUP BY TRIM(nomor_box), TRIM(nomor_laci)");
             $stmt->execute(['box'=>$box,'laci'=>$laci]);
             return $stmt->fetch() ?: null;
         }
-        // fallback: find by box only
-        $stmt = $pdo->prepare("SELECT nomor_box as id, nomor_box as name, nomor_box, COUNT(*) as product_count FROM data_barang WHERE nomor_box = :box GROUP BY nomor_box");
+        $stmt = $pdo->prepare("SELECT TRIM(nomor_box) as id, TRIM(nomor_box) as name, TRIM(nomor_box) as nomor_box, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box GROUP BY TRIM(nomor_box)");
         $stmt->execute(['box'=>$id]);
         return $stmt->fetch() ?: null;
     }
@@ -69,34 +68,31 @@ class Location {
 
     public static function update(string $id, array $data): bool {
         $pdo = Database::getConnection();
-        $oldParts = explode('-', $id);
+        $oldParts = explode('-', trim($id));
         if (count($oldParts) < 2) return false;
-        $oldBox = $oldParts[0];
-        $oldLaci = $oldParts[1];
-        $newBox = $data['nomor_box'] ?? $data['name'] ?? $oldBox;
-        $newLaci = $data['nomor_laci'] ?? $oldLaci;
+        $oldBox = trim($oldParts[0]);
+        $oldLaci = trim($oldParts[1]);
+        $newBox = isset($data['nomor_box']) ? trim($data['nomor_box']) : (isset($data['name']) ? trim($data['name']) : $oldBox);
+        $newLaci = isset($data['nomor_laci']) ? trim($data['nomor_laci']) : $oldLaci;
 
-        // If newBox contains dash format, split
         if (strpos($newBox, '-') !== false) {
             $p = explode('-', $newBox);
-            $newBox = $p[0];
-            $newLaci = $p[1] ?? $newLaci;
+            $newBox = trim($p[0]);
+            $newLaci = trim($p[1] ?? $newLaci);
         }
+        if ($newBox === '' || $newLaci === '') return false;
 
-        $stmt = $pdo->prepare("UPDATE data_barang SET nomor_box = :nb, nomor_laci = :nl WHERE nomor_box = :ob AND nomor_laci = :ol");
+        $stmt = $pdo->prepare("UPDATE data_barang SET nomor_box = :nb, nomor_laci = :nl WHERE TRIM(nomor_box) = :ob AND TRIM(nomor_laci) = :ol");
         return $stmt->execute(['nb'=>$newBox,'nl'=>$newLaci,'ob'=>$oldBox,'ol'=>$oldLaci]);
     }
 
     public static function delete(string $id): bool {
-        // Deleting location means deleting all products in that location? Dangerous. Better to prevent if has products.
-        // For safety, we return false if has products, or we delete none and say success but no action.
-        // Here we choose: if location has products, forbid deletion.
         $pdo = Database::getConnection();
-        $parts = explode('-', $id);
+        $parts = explode('-', trim($id));
         if (count($parts) < 2) return false;
-        $box = $parts[0];
-        $laci = $parts[1];
-        $check = $pdo->prepare("SELECT COUNT(*) as c FROM data_barang WHERE nomor_box = :b AND nomor_laci = :l");
+        $box = trim($parts[0]);
+        $laci = trim($parts[1]);
+        $check = $pdo->prepare("SELECT COUNT(*) as c FROM data_barang WHERE TRIM(nomor_box) = :b AND TRIM(nomor_laci) = :l");
         $check->execute(['b'=>$box,'l'=>$laci]);
         $c = $check->fetch()['c'] ?? 0;
         if ($c > 0) throw new \Exception("Cannot delete location with $c products. Move or delete products first.");
@@ -105,11 +101,13 @@ class Location {
 
     public static function productsByLocation(string $box, ?string $laci = null): array {
         $pdo = Database::getConnection();
+        $box = trim($box);
+        $laci = $laci !== null ? trim($laci) : null;
         if ($laci) {
-            $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE nomor_box = :b AND nomor_laci = :l ORDER BY nama");
+            $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE TRIM(nomor_box) = :b AND TRIM(nomor_laci) = :l ORDER BY nama");
             $stmt->execute(['b'=>$box,'l'=>$laci]);
         } else {
-            $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE nomor_box = :b ORDER BY CAST(nomor_laci AS UNSIGNED), nama");
+            $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE TRIM(nomor_box) = :b ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED), nama");
             $stmt->execute(['b'=>$box]);
         }
         return $stmt->fetchAll();

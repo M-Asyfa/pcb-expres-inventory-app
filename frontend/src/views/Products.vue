@@ -183,7 +183,7 @@ const editing = ref(null)
 const stockProduct = ref(null)
 const perPage = ref(20)
 const meta = ref({ total:0, page:1, per_page:20, total_pages:1 })
-const stockChanging = ref({})
+const stockChanging = reactive({})
 const sortKey = ref('id')
 const sortAsc = ref(true)
 
@@ -195,21 +195,51 @@ const debouncedFetch = ()=>{ clearTimeout(timer); timer=setTimeout(()=>{meta.val
 const resetAndFetch = ()=>{ meta.value.page=1; fetchProducts() }
 
 const fetchProducts = async () => {
-  const params = { page: meta.value.page, per_page: perPage.value, search: search.value||undefined, kategori: kategoriFilter.value||undefined, nomor_box: boxFilter.value||undefined, low_stock: lowStockOnly.value?1:undefined }
-  const res = await productService.getAll(params)
-  products.value = res.data.data
-  if(res.data.meta) meta.value = res.data.meta
+  const params = {
+    page: meta.value.page,
+    per_page: perPage.value,
+    search: search.value||undefined,
+    kategori: kategoriFilter.value||undefined,
+    nomor_box: boxFilter.value||undefined,
+    low_stock: lowStockOnly.value?1:undefined,
+    sort_by: sortKey.value||undefined,
+    sort_dir: sortAsc.value ? 'asc' : 'desc'
+  }
+  try {
+    const res = await productService.getAll(params)
+    products.value = res.data.data
+    if(res.data.meta) meta.value = res.data.meta
+  } catch(e) {
+    console.error('fetchProducts failed', e)
+  }
 }
 const fetchMeta = async () => {
-  const [catRes, boxRes] = await Promise.all([categoryService.getAll(), locationService.getBoxes()])
-  categories.value = catRes.data.data
-  boxes.value = boxRes.data.data
+  try {
+    const [catRes, boxRes] = await Promise.all([categoryService.getAll(), locationService.getBoxes()])
+    categories.value = catRes.data.data
+    boxes.value = boxRes.data.data
+  } catch(e) {
+    console.error('fetchMeta failed', e)
+  }
 }
 onMounted(()=>{fetchProducts(); fetchMeta()})
 
 const sortedProducts = computed(()=>{
+  // Server already sorts globally, but keep client fallback for columns not yet server-sorted
   let list = [...products.value]
-  if (sortKey.value==='totalValue') {
+  // If server sorting active for these keys, skip client re-sort to preserve server order
+  const serverSortedKeys = ['id','nama','kategori','box','nomor_box','laci','nomor_laci','harga','stock','totalValue','total_value','updated','batas_stock','keterangan']
+  if (serverSortedKeys.includes(sortKey.value)) {
+    // For keys that server handles, we trust server order (already sorted by fetchProducts)
+    // But still apply client sort as secondary if user toggles same column quickly before fetch completes
+    // We'll sort only if list length < perPage (small) to avoid flicker, else return as-is
+    if (list.length <= perPage.value) {
+      // do client sort for immediate feedback
+    } else {
+      return list
+    }
+  }
+  if (sortKey.value==='totalValue' || sortKey.value==='total_value') {
     list.sort((a,b)=> sortAsc.value ? (a.harga*a.stock)-(b.harga*b.stock) : (b.harga*b.stock)-(a.harga*a.stock))
   } else if (sortKey.value==='stock') {
     list.sort((a,b)=> sortAsc.value ? a.stock-b.stock : b.stock-a.stock)
@@ -219,6 +249,16 @@ const sortedProducts = computed(()=>{
     list.sort((a,b)=> sortAsc.value ? a.id-b.id : b.id-a.id)
   } else if (sortKey.value==='nama') {
     list.sort((a,b)=> sortAsc.value ? a.nama.localeCompare(b.nama) : b.nama.localeCompare(a.nama))
+  } else if (sortKey.value==='keterangan' || sortKey.value==='keterangan_barang') {
+    list.sort((a,b)=> sortAsc.value ? (a.keterangan_barang||'').localeCompare(b.keterangan_barang||'') : (b.keterangan_barang||'').localeCompare(a.keterangan_barang||''))
+  } else if (sortKey.value==='kategori') {
+    list.sort((a,b)=> sortAsc.value ? (a.kategori||'').localeCompare(b.kategori||'') : (b.kategori||'').localeCompare(a.kategori||''))
+  } else if (sortKey.value==='box' || sortKey.value==='nomor_box') {
+    list.sort((a,b)=> sortAsc.value ? parseInt(a.nomor_box||0)-parseInt(b.nomor_box||0) : parseInt(b.nomor_box||0)-parseInt(a.nomor_box||0))
+  } else if (sortKey.value==='laci' || sortKey.value==='nomor_laci') {
+    list.sort((a,b)=> sortAsc.value ? parseInt(a.nomor_laci||0)-parseInt(b.nomor_laci||0) : parseInt(b.nomor_laci||0)-parseInt(a.nomor_laci||0))
+  } else if (sortKey.value==='batas_stock') {
+    list.sort((a,b)=> sortAsc.value ? a.batas_stock-b.batas_stock : b.batas_stock-a.batas_stock)
   }
   return list
 })
@@ -226,6 +266,8 @@ const sortedProducts = computed(()=>{
 const sortBy = (key) => {
   if (sortKey.value===key) sortAsc.value=!sortAsc.value
   else { sortKey.value=key; sortAsc.value=true }
+  // Trigger server-side sort for global sorting
+  fetchProducts()
 }
 
 const visiblePages = computed(()=>{
@@ -242,15 +284,15 @@ const openStockModal = async (p)=>{ const res=await productService.getOne(p.id);
 const submitStock = async ()=>{ try{ await productService.adjustStock(stockProduct.value.id,stockForm); stockProduct.value=null; fetchProducts() } catch(e){ alert(e.response?.data?.error||e.message) } }
 
 const quickStock = async (product, delta) => {
-  if (stockChanging.value[product.id]) return
+  if (stockChanging[product.id]) return
   if (delta<0 && product.stock<=0) { alert('Stock sudah 0'); return }
-  stockChanging.value[product.id]=true
+  stockChanging[product.id]=true
   try{
     const type = delta>0 ? 'in' : 'out'
     await productService.adjustStock(product.id, { type, quantity: Math.abs(delta), reason: `Quick ${delta>0?'+':''}${delta} table` })
     product.stock += delta
   } catch(e){ alert(e.response?.data?.error||e.message) }
-  finally{ stockChanging.value[product.id]=false; fetchProducts() }
+  finally{ stockChanging[product.id]=false; fetchProducts() }
 }
 
 const exportCsv = async () => {

@@ -3,30 +3,38 @@ namespace App\Middleware;
 
 class Cors {
     public static function handle(): void {
-        // For development: allow all origins for 5173 frontend
-        // In production, set CORS_ALLOWED_ORIGINS to specific domains
-        $allowedOrigins = $_ENV['CORS_ALLOWED_ORIGINS'] ?? $_SERVER['CORS_ALLOWED_ORIGINS'] ?? getenv('CORS_ALLOWED_ORIGINS') ?: '*';
+        $allowedOriginsRaw = $_ENV['CORS_ALLOWED_ORIGINS'] ?? $_SERVER['CORS_ALLOWED_ORIGINS'] ?? getenv('CORS_ALLOWED_ORIGINS') ?: '';
         $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-        // Always allow localhost:5173 and localhost:3000 for dev
-        if ($allowedOrigins === '*' || $allowedOrigins === '') {
+        $isWildcard = $allowedOriginsRaw === '*' || trim($allowedOriginsRaw) === '';
+        $allowedOrigins = $isWildcard ? [] : array_map('trim', explode(',', $allowedOriginsRaw));
+        $allowedOrigins = array_filter($allowedOrigins, fn($o) => $o !== '');
+
+        $originAllowed = false;
+        if ($isWildcard) {
+            // Dev mode: allow all, but never with credentials
             header("Access-Control-Allow-Origin: *");
+            $originAllowed = true;
+        } elseif ($requestOrigin !== '' && in_array($requestOrigin, $allowedOrigins, true)) {
+            header("Access-Control-Allow-Origin: $requestOrigin");
+            header("Access-Control-Allow-Credentials: true");
+            header("Vary: Origin");
+            $originAllowed = true;
+        } elseif ($requestOrigin === '') {
+            // No Origin header (curl, Postman, same-origin) – allow first configured origin for non-browser,
+            // or allow without CORS header block for server-to-server
+            // Do NOT set Access-Control-Allow-Origin to avoid leaking
+            $originAllowed = true;
         } else {
-            $origins = array_map('trim', explode(',', $allowedOrigins));
-            // If request origin is in allowed list, reflect it back (required for credentials)
-            if ($requestOrigin && in_array($requestOrigin, $origins)) {
-                header("Access-Control-Allow-Origin: $requestOrigin");
-                header("Access-Control-Allow-Credentials: true");
-                header("Vary: Origin");
-            } else {
-                // Fallback: allow first origin or * for dev
-                // For preflight, allow requesting origin to avoid CORS block
-                if ($requestOrigin) {
-                    header("Access-Control-Allow-Origin: $requestOrigin");
-                    header("Vary: Origin");
-                } else {
-                    header("Access-Control-Allow-Origin: " . ($origins[0] ?? "*"));
-                }
+            // Origin not allowed – do not set Allow-Origin header, browser will block
+            $originAllowed = false;
+            // For preflight from disallowed origin, respond 403
+            if ($requestMethod === 'OPTIONS') {
+                http_response_code(403);
+                header('Content-Type: application/json');
+                echo json_encode(['error' => 'CORS origin not allowed']);
+                exit;
             }
         }
 
@@ -35,9 +43,14 @@ class Cors {
         header("Access-Control-Max-Age: 86400");
 
         // Handle preflight OPTIONS request immediately
-        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+        if ($requestMethod === 'OPTIONS') {
+            if (!$originAllowed && $requestOrigin !== '') {
+                http_response_code(403);
+                header('Content-Type: application/json');
+                echo json_encode(['error' => 'CORS origin not allowed']);
+                exit;
+            }
             http_response_code(200);
-            // Ensure no further output
             exit;
         }
     }

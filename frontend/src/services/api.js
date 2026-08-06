@@ -1,12 +1,34 @@
 import axios from 'axios'
 
+const token = import.meta.env.VITE_API_TOKEN || localStorage.getItem('api_token') || ''
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   }
 })
+
+// Allow dynamic token setup for prod
+api.interceptors.request.use(config => {
+  const t = import.meta.env.VITE_API_TOKEN || localStorage.getItem('api_token')
+  if (t) {
+    config.headers.Authorization = `Bearer ${t}`
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  r => r,
+  err => {
+    if (err.response?.status === 401) {
+      console.warn('API unauthorized – check VITE_API_TOKEN / API_TOKEN')
+    }
+    return Promise.reject(err)
+  }
+)
 
 export default api
 
