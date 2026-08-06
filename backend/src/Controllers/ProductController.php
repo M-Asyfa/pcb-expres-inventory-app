@@ -6,25 +6,36 @@ use App\Core\Response;
 
 class ProductController {
     
+    private function parseBoolFilter(string $key): ?bool {
+        if (!isset($_GET[$key])) return null;
+        $v = $_GET[$key];
+        if ($v === '' || $v === '0' || $v === 'false' || $v === false) return null;
+        if ($v === '1' || $v === 'true' || $v === true || $v === 'on') return true;
+        // If param exists without value like ?low_stock, treat as true
+        return true;
+    }
+
     public function index(): void {
         $page = max(1, (int)($_GET['page'] ?? 1));
         $perPage = max(5, min(100, (int)($_GET['per_page'] ?? 20)));
         
         $filters = [
-            'search' => $_GET['search'] ?? null,
+            'search' => isset($_GET['search']) ? trim($_GET['search']) : null,
             'kategori' => $_GET['kategori'] ?? null,
             'category_id' => $_GET['category_id'] ?? null, // compat
-            'nomor_box' => $_GET['nomor_box'] ?? null,
-            'nomor_laci' => $_GET['nomor_laci'] ?? null,
-            'low_stock' => isset($_GET['low_stock']) ? true : null,
-            'out_of_stock' => isset($_GET['out_of_stock']) ? true : null,
+            'nomor_box' => isset($_GET['nomor_box']) ? trim($_GET['nomor_box']) : null,
+            'nomor_laci' => isset($_GET['nomor_laci']) ? trim($_GET['nomor_laci']) : null,
+            'low_stock' => $this->parseBoolFilter('low_stock'),
+            'out_of_stock' => $this->parseBoolFilter('out_of_stock'),
             'page' => $page,
-            'per_page' => $perPage
+            'per_page' => $perPage,
+            'sort_by' => $_GET['sort_by'] ?? null,
+            'sort_dir' => $_GET['sort_dir'] ?? null
         ];
 
         // Handle legacy limit param
         if (isset($_GET['limit']) && !isset($_GET['page'])) {
-            $filters['limit'] = (int)$_GET['limit'];
+            $filters['limit'] = max(1, min(500, (int)$_GET['limit']));
             unset($filters['page'], $filters['per_page']);
             $products = Product::all($filters);
             Response::json(['data' => $products, 'total' => count($products)]);
@@ -73,17 +84,58 @@ class ProductController {
         Response::json(['data' => Product::getBoxesStats()]);
     }
 
+    private function sanitizeInput(array $input): array {
+        // Trim strings and normalize
+        $out = [];
+        foreach ($input as $k => $v) {
+            if (is_string($v)) {
+                $out[$k] = trim($v);
+            } else {
+                $out[$k] = $v;
+            }
+        }
+        // Ensure numeric fields are valid ints
+        foreach (['harga','stock','batas_stock'] as $numField) {
+            if (isset($out[$numField])) {
+                if (!is_numeric($out[$numField])) {
+                    Response::error("Field $numField must be numeric", 422);
+                }
+                $out[$numField] = (int)$out[$numField];
+                if ($numField !== 'harga' && $out[$numField] < 0) {
+                    Response::error("Field $numField cannot be negative", 422);
+                }
+                if ($numField === 'harga' && $out[$numField] < 0) {
+                    Response::error("Harga cannot be negative", 422);
+                }
+            }
+        }
+        // Normalize box/laci - trim spaces, remove empty
+        if (isset($out['nomor_box'])) {
+            $out['nomor_box'] = trim((string)$out['nomor_box']);
+            if ($out['nomor_box'] === '') $out['nomor_box'] = '0';
+        }
+        if (isset($out['nomor_laci'])) {
+            $out['nomor_laci'] = trim((string)$out['nomor_laci']);
+            if ($out['nomor_laci'] === '') $out['nomor_laci'] = '1';
+        }
+        if (isset($out['nama']) && mb_strlen($out['nama']) > 500) {
+            Response::error('Nama too long (max 500)', 422);
+        }
+        return $out;
+    }
+
     public function store(): void {
         $input = json_decode(file_get_contents('php://input'), true);
         if (!$input) Response::error('Invalid JSON', 400);
 
         $required = ['nama'];
         foreach ($required as $field) {
-            if (empty($input[$field])) {
+            if (empty($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
                 Response::error("Field $field is required", 422);
             }
         }
 
+        $input = $this->sanitizeInput($input);
         $id = Product::create($input);
         $product = Product::find($id);
         Response::json(['data' => $product, 'message' => 'Barang created'], 201);
@@ -96,6 +148,7 @@ class ProductController {
         $input = json_decode(file_get_contents('php://input'), true);
         if (!$input) Response::error('Invalid JSON', 400);
 
+        $input = $this->sanitizeInput($input);
         Product::update($id, $input);
         Response::json(['data' => Product::find($id), 'message' => 'Barang updated']);
     }

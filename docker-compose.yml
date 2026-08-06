@@ -3,16 +3,17 @@ services:
     image: mariadb:11
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: root
-      MARIADB_DATABASE: inventory_pcbexpressjogja
-      MARIADB_USER: inventory
-      MARIADB_PASSWORD: inventory_secret
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-inventory_pcbexpressjogja}
+      MARIADB_USER: ${MARIADB_USER:-inventory}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-inventory_secret}
     ports:
-      - "3306:3306"
+      - "${DB_EXTERNAL_PORT:-3306}:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
-      - ./database/inventory_pcbexpressjogja.sql:/docker-entrypoint-initdb.d/001_real_data.sql
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/002_schema.sql
+      # Real data dump is gitignored; if you have it locally, import manually: docker exec -i db mariadb -u root -proot inventory_pcbexpressjogja < database/inventory_pcbexpressjogja.sql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
+      - ./database/real_indexes.sql:/docker-entrypoint-initdb.d/002_real_indexes.sql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -26,18 +27,20 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:80"
+      - "${BACKEND_EXTERNAL_PORT:-8000}:80"
     volumes:
       - ./backend:/var/www/html
       - ./docker/apache.conf:/etc/apache2/sites-available/000-default.conf
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_DATABASE: inventory_pcbexpressjogja
-      DB_USERNAME: root
-      DB_PASSWORD: root
-      APP_DEBUG: "true"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
+      DB_DATABASE: ${MARIADB_DATABASE:-inventory_pcbexpressjogja}
+      DB_USERNAME: ${MARIADB_USER:-inventory}
+      DB_PASSWORD: ${MARIADB_PASSWORD:-inventory_secret}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      API_TOKEN: ${API_TOKEN:-}
+      API_PROTECT_ALL: ${API_PROTECT_ALL:-false}
     command: >
       bash -c "
       a2enmod rewrite headers &&

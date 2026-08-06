@@ -11,14 +11,10 @@ use PDO;
  * Plus log_stock for history: no, id (FK data_barang), waktu, stock (delta)
  */
 class Product {
-    public static function all(array $filters = []): array {
-        $pdo = Database::getConnection();
-        
-        $sql = "SELECT * FROM data_barang WHERE 1=1";
-        $params = [];
-
+    private static function buildWhere(array $filters, array &$params): string {
+        $where = "";
         if (!empty($filters['search'])) {
-            $sql .= " AND (nama LIKE :search1 OR keterangan_barang LIKE :search2 OR kategori LIKE :search3 OR nomor_box LIKE :search4 OR nomor_laci LIKE :search5)";
+            $where .= " AND (nama LIKE :search1 OR keterangan_barang LIKE :search2 OR kategori LIKE :search3 OR TRIM(nomor_box) LIKE :search4 OR TRIM(nomor_laci) LIKE :search5)";
             $like = '%' . $filters['search'] . '%';
             $params['search1'] = $like;
             $params['search2'] = $like;
@@ -27,44 +23,74 @@ class Product {
             $params['search5'] = $like;
         }
         if (!empty($filters['kategori'])) {
-            $sql .= " AND kategori = :kategori";
-            $params['kategori'] = $filters['kategori'];
+            $where .= " AND kategori = :kategori";
+            $params['kategori'] = trim($filters['kategori']);
         }
-        if (!empty($filters['category_id'])) { // backward compat with old query param
-            $sql .= " AND kategori = :kategori2";
-            $params['kategori2'] = $filters['category_id'];
+        if (!empty($filters['category_id'])) {
+            $where .= " AND kategori = :kategori2";
+            $params['kategori2'] = trim($filters['category_id']);
         }
         if (!empty($filters['nomor_box'])) {
-            $sql .= " AND nomor_box = :nomor_box";
-            $params['nomor_box'] = $filters['nomor_box'];
+            $where .= " AND TRIM(nomor_box) = :nomor_box";
+            $params['nomor_box'] = trim($filters['nomor_box']);
         }
         if (!empty($filters['nomor_laci'])) {
-            $sql .= " AND nomor_laci = :nomor_laci";
-            $params['nomor_laci'] = $filters['nomor_laci'];
+            $where .= " AND TRIM(nomor_laci) = :nomor_laci";
+            $params['nomor_laci'] = trim($filters['nomor_laci']);
         }
         if (!empty($filters['low_stock'])) {
-            $sql .= " AND stock <= batas_stock";
+            $where .= " AND stock <= batas_stock";
         }
         if (!empty($filters['out_of_stock'])) {
-            $sql .= " AND stock = 0";
+            $where .= " AND stock = 0";
         }
+        return $where;
+    }
 
-        $sql .= " ORDER BY updated DESC, id DESC";
+    private static function buildOrder(array $filters): string {
+        $allowed = [
+            'id' => 'id',
+            'nama' => 'nama',
+            'keterangan' => 'keterangan_barang',
+            'kategori' => 'kategori',
+            'box' => 'CAST(TRIM(nomor_box) AS UNSIGNED)',
+            'nomor_box' => 'CAST(TRIM(nomor_box) AS UNSIGNED)',
+            'laci' => 'CAST(TRIM(nomor_laci) AS UNSIGNED)',
+            'nomor_laci' => 'CAST(TRIM(nomor_laci) AS UNSIGNED)',
+            'harga' => 'harga',
+            'stock' => 'stock',
+            'batas_stock' => 'batas_stock',
+            'updated' => 'updated',
+            'total_value' => '(harga * stock)',
+            'totalValue' => '(harga * stock)'
+        ];
+        $sortBy = $filters['sort_by'] ?? null;
+        $sortDir = strtoupper($filters['sort_dir'] ?? 'DESC');
+        if (!in_array($sortDir, ['ASC','DESC'], true)) $sortDir = 'DESC';
+
+        if ($sortBy && isset($allowed[$sortBy])) {
+            // Secondary sort ensures stable pagination
+            return " ORDER BY {$allowed[$sortBy]} $sortDir, id DESC";
+        }
+        return " ORDER BY updated DESC, id DESC";
+    }
+
+    public static function all(array $filters = []): array {
+        $pdo = Database::getConnection();
+        $params = [];
+        $sql = "SELECT * FROM data_barang WHERE 1=1";
+        $sql .= self::buildWhere($filters, $params);
+        $sql .= self::buildOrder($filters);
         
-        // Pagination support
         if (isset($filters['per_page'])) {
             $perPage = max(1, min(100, (int)$filters['per_page']));
             $page = max(1, (int)($filters['page'] ?? 1));
             $offset = ($page - 1) * $perPage;
             $sql .= " LIMIT $perPage OFFSET $offset";
         } elseif (!empty($filters['limit'])) {
-            $limit = (int)$filters['limit'];
-            $offset = (int)($filters['offset'] ?? 0);
-            if ($offset > 0) {
-                $sql .= " LIMIT $limit OFFSET $offset";
-            } else {
-                $sql .= " LIMIT $limit";
-            }
+            $limit = max(1, min(500, (int)$filters['limit']));
+            $offset = max(0, (int)($filters['offset'] ?? 0));
+            $sql .= $offset > 0 ? " LIMIT $limit OFFSET $offset" : " LIMIT $limit";
         }
         
         $stmt = $pdo->prepare($sql);
@@ -74,41 +100,9 @@ class Product {
 
     public static function count(array $filters = []): int {
         $pdo = Database::getConnection();
-        $sql = "SELECT COUNT(*) as cnt FROM data_barang WHERE 1=1";
         $params = [];
-
-        if (!empty($filters['search'])) {
-            $sql .= " AND (nama LIKE :search1 OR keterangan_barang LIKE :search2 OR kategori LIKE :search3 OR nomor_box LIKE :search4 OR nomor_laci LIKE :search5)";
-            $like = '%' . $filters['search'] . '%';
-            $params['search1'] = $like;
-            $params['search2'] = $like;
-            $params['search3'] = $like;
-            $params['search4'] = $like;
-            $params['search5'] = $like;
-        }
-        if (!empty($filters['kategori'])) {
-            $sql .= " AND kategori = :kategori";
-            $params['kategori'] = $filters['kategori'];
-        }
-        if (!empty($filters['category_id'])) {
-            $sql .= " AND kategori = :kategori2";
-            $params['kategori2'] = $filters['category_id'];
-        }
-        if (!empty($filters['nomor_box'])) {
-            $sql .= " AND nomor_box = :nomor_box";
-            $params['nomor_box'] = $filters['nomor_box'];
-        }
-        if (!empty($filters['nomor_laci'])) {
-            $sql .= " AND nomor_laci = :nomor_laci";
-            $params['nomor_laci'] = $filters['nomor_laci'];
-        }
-        if (!empty($filters['low_stock'])) {
-            $sql .= " AND stock <= batas_stock";
-        }
-        if (!empty($filters['out_of_stock'])) {
-            $sql .= " AND stock = 0";
-        }
-
+        $sql = "SELECT COUNT(*) as cnt FROM data_barang WHERE 1=1";
+        $sql .= self::buildWhere($filters, $params);
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $row = $stmt->fetch();
@@ -128,12 +122,17 @@ class Product {
         $sql = "INSERT INTO data_barang (nama, kategori, keterangan_barang, nomor_box, nomor_laci, harga, stock, batas_stock)
                 VALUES (:nama, :kategori, :keterangan_barang, :nomor_box, :nomor_laci, :harga, :stock, :batas_stock)";
         $stmt = $pdo->prepare($sql);
+        // Normalize box/laci - trim spaces like "84 " seen in real data
+        $box = isset($data['nomor_box']) ? trim((string)$data['nomor_box']) : '0';
+        $laci = isset($data['nomor_laci']) ? trim((string)$data['nomor_laci']) : '1';
+        if ($box === '') $box = '0';
+        if ($laci === '') $laci = '1';
         $stmt->execute([
-            'nama' => $data['nama'],
-            'kategori' => $data['kategori'] ?? '',
-            'keterangan_barang' => $data['keterangan_barang'] ?? $data['nama'] ?? '',
-            'nomor_box' => $data['nomor_box'] ?? '0',
-            'nomor_laci' => $data['nomor_laci'] ?? '1',
+            'nama' => trim($data['nama']),
+            'kategori' => isset($data['kategori']) ? trim($data['kategori']) : '',
+            'keterangan_barang' => isset($data['keterangan_barang']) ? trim($data['keterangan_barang']) : (trim($data['nama']) ?? ''),
+            'nomor_box' => $box,
+            'nomor_laci' => $laci,
             'harga' => $data['harga'] ?? 0,
             'stock' => $data['stock'] ?? 0,
             'batas_stock' => $data['batas_stock'] ?? 10
@@ -255,6 +254,7 @@ class Product {
 
     public static function getBoxesStats(): array {
         $pdo = Database::getConnection();
-        return $pdo->query("SELECT nomor_box, COUNT(*) as product_count, SUM(stock) as total_stock FROM data_barang GROUP BY nomor_box ORDER BY CAST(nomor_box AS UNSIGNED)")->fetchAll();
+        // TRIM to handle dirty "84 " values
+        return $pdo->query("SELECT TRIM(nomor_box) as nomor_box, COUNT(*) as product_count, SUM(stock) as total_stock FROM data_barang GROUP BY TRIM(nomor_box) ORDER BY CAST(TRIM(nomor_box) AS UNSIGNED)")->fetchAll();
     }
 }

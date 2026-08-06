@@ -48,20 +48,25 @@ if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
         }
     }
     // Ensure Docker env vars are also in $_ENV (phpdotenv quirk)
-    foreach (['DB_HOST','DB_PORT','DB_DATABASE','DB_USERNAME','DB_PASSWORD','APP_DEBUG'] as $k) {
+    foreach (['DB_HOST','DB_PORT','DB_DATABASE','DB_USERNAME','DB_PASSWORD','APP_DEBUG','API_TOKEN','API_PROTECT_ALL','CORS_ALLOWED_ORIGINS'] as $k) {
         if (getenv($k) !== false && !isset($_ENV[$k])) $_ENV[$k] = getenv($k);
         if (isset($_SERVER[$k]) && !isset($_ENV[$k])) $_ENV[$k] = $_SERVER[$k];
     }
 }
 
 use App\Middleware\Cors;
+use App\Middleware\Auth;
 
-// CORS
+// CORS must be first (handles OPTIONS)
 Cors::handle();
 
-// Error handling
+// Auth check for mutating routes if API_TOKEN set
+Auth::handle();
+
+// Error handling - respect APP_DEBUG, default false for safety
 error_reporting(E_ALL);
-$debug = ($_ENV['APP_DEBUG'] ?? $_SERVER['APP_DEBUG'] ?? 'true') === 'true' || ($_ENV['APP_DEBUG'] ?? true) === true;
+$debugRaw = $_ENV['APP_DEBUG'] ?? $_SERVER['APP_DEBUG'] ?? getenv('APP_DEBUG') ?: 'false';
+$debug = $debugRaw === 'true' || $debugRaw === true || $debugRaw === '1';
 ini_set('display_errors', $debug ? '1' : '0');
 
 // Load routes and dispatch

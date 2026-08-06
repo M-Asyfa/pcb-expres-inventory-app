@@ -51,9 +51,20 @@ class LocationController {
     public function update(array $params): void {
         $id = $params['id'];
         $input = json_decode(file_get_contents('php://input'), true);
+        if (!$input) Response::error('Invalid JSON', 400);
+        // Sanitize box/laci
+        if (isset($input['nomor_box'])) $input['nomor_box'] = trim((string)$input['nomor_box']);
+        if (isset($input['nomor_laci'])) $input['nomor_laci'] = trim((string)$input['nomor_laci']);
         try {
-            Location::update($id, $input ?? []);
-            Response::json(['data' => Location::find($input['nomor_box'].'-'.$input['nomor_laci'] ?? $id), 'message' => 'Location updated - all products moved']);
+            Location::update($id, $input);
+            $newBox = $input['nomor_box'] ?? null;
+            $newLaci = $input['nomor_laci'] ?? null;
+            $lookupId = ($newBox !== null && $newLaci !== null) ? ($newBox . '-' . $newLaci) : $id;
+            // If newBox contains dash already, use as is
+            if ($newBox !== null && str_contains($newBox, '-') && $newLaci === null) {
+                $lookupId = $newBox;
+            }
+            Response::json(['data' => Location::find($lookupId), 'message' => 'Location updated - all products moved']);
         } catch (\Exception $e) {
             Response::error($e->getMessage(), 400);
         }
