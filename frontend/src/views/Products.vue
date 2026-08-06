@@ -1,8 +1,10 @@
 <template>
   <div>
-    <!-- Hidden direct upload inputs -->
+    <!-- Hidden upload inputs -->
     <input ref="quickUploadInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" @change="onQuickPhotoSelected" />
     <input ref="modalUploadInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" @change="onModalPhotoSelected" />
+    <!-- Mobile camera capture input (works on HTTP, triggers native camera) -->
+    <input ref="cameraFileInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onCameraFileSelected" />
 
     <div class="mb-4 lg:mb-5">
       <div class="text-[10px] tracking-[0.2em] text-gray-500 font-semibold">INVENTORY OVERVIEW</div>
@@ -243,26 +245,80 @@
           </div>
         </CardHeader>
         <CardContent class="p-0">
-          <div v-if="getPhotoUrl(photoModalProduct.foto)" class="bg-[#FAF6EE] flex items-center justify-center p-3 lg:p-6 min-h-[260px]">
-            <img :src="getPhotoUrl(photoModalProduct.foto)" :alt="photoModalProduct.nama" class="max-w-full max-h-[60vh] lg:max-h-[70vh] object-contain rounded-[12px] shadow-sm" />
+          <!-- Main photo view -->
+          <div v-if="!cameraActive && !capturedPreview">
+            <div v-if="getPhotoUrl(photoModalProduct.foto)" class="bg-[#FAF6EE] flex items-center justify-center p-3 lg:p-6 min-h-[260px]">
+              <img :src="getPhotoUrl(photoModalProduct.foto)" :alt="photoModalProduct.nama" class="max-w-full max-h-[60vh] lg:max-h-[70vh] object-contain rounded-[12px] shadow-sm" />
+            </div>
+            <div v-else class="py-16 lg:py-20 text-center bg-[#FFFBF2]">
+              <div class="text-5xl mb-3">📷</div>
+              <div class="text-[14px] font-bold">Tidak ada foto</div>
+              <div class="text-[11px] text-gray-500 mt-1">Gunakan tombol di bawah untuk ambil foto via kamera atau pilih file</div>
+            </div>
           </div>
-          <div v-else class="py-16 lg:py-20 text-center bg-[#FFFBF2]">
-            <div class="text-5xl mb-3">📷</div>
-            <div class="text-[14px] font-bold">Tidak ada foto</div>
+
+          <!-- Camera active view -->
+          <div v-if="cameraActive" class="bg-black flex flex-col items-center justify-center p-3 lg:p-4 space-y-3">
+            <div class="relative w-full max-w-[480px] aspect-[4/3] bg-black rounded-[12px] overflow-hidden border border-[#333]">
+              <video ref="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+              <div class="absolute bottom-2 left-2 text-[10px] bg-black/60 text-white px-2 py-1 rounded-full">Kamera aktif • {{ cameraFacing === 'environment' ? 'Belakang' : 'Depan' }}</div>
+            </div>
+            <canvas ref="cameraCanvas" class="hidden"></canvas>
+            <div v-if="cameraError" class="text-[11px] text-red-400 bg-red-950/50 border border-red-800 rounded-[8px] px-3 py-2 max-w-[480px] w-full">{{ cameraError }}</div>
+            <div class="flex gap-2 w-full max-w-[480px]">
+              <UiButton size="sm" @click="capturePhoto" class="h-10 flex-1 bg-white text-black hover:bg-gray-100 border-white">📸 Ambil Foto</UiButton>
+              <UiButton variant="secondary" size="sm" @click="switchCamera" class="h-10 px-3" title="Ganti kamera">🔄</UiButton>
+              <UiButton variant="secondary" size="sm" @click="closeCamera" class="h-10 px-3">✕ Tutup</UiButton>
+            </div>
           </div>
+
+          <!-- Captured preview -->
+          <div v-if="capturedPreview" class="bg-[#FAF6EE] flex flex-col items-center justify-center p-3 lg:p-6 space-y-3 min-h-[260px]">
+            <div class="text-[11px] font-bold text-[#0F1E35]">Preview hasil kamera</div>
+            <img :src="capturedPreview" class="max-w-full max-h-[60vh] lg:max-h-[70vh] object-contain rounded-[12px] shadow-sm border border-[#E8DDC7]" />
+            <div class="flex gap-2 w-full max-w-[480px] justify-center">
+              <UiButton size="sm" @click="uploadCapturedPhoto" class="h-10 flex-1" :disabled="uploadingPhoto">{{ uploadingPhoto ? 'Uploading...' : '✅ Upload hasil kamera' }}</UiButton>
+              <UiButton variant="secondary" size="sm" @click="retakePhoto" class="h-10 flex-1">🔄 Ulangi</UiButton>
+            </div>
+          </div>
+
           <div class="p-4 border-t border-[#F0E6D2] bg-white space-y-3">
+            <div v-if="cameraError" class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[8px] px-3 py-2">{{ cameraError }}</div>
             <div class="flex flex-wrap gap-2">
-              <UiButton size="sm" @click="triggerModalUpload" class="h-10 flex-1 lg:flex-none" :disabled="uploadingPhoto">
-                {{ uploadingPhoto ? 'Uploading...' : (photoModalProduct.foto ? '🔄 Ganti Foto' : '📤 Pilih Foto') }}
+              <UiButton size="sm" @click="triggerModalUpload" class="h-10 flex-1 lg:flex-none" :disabled="uploadingPhoto || cameraActive">
+                {{ uploadingPhoto ? 'Uploading...' : (photoModalProduct.foto ? '🔄 Ganti Foto' : '📤 Pilih File') }}
               </UiButton>
-              <UiButton v-if="photoModalProduct.foto" variant="secondary" size="sm" @click="deletePhotoFromModal" class="h-10 flex-1 lg:flex-none">🗑️ Hapus foto</UiButton>
+              <UiButton size="sm" @click="openCamera" class="h-10 flex-1 lg:flex-none bg-[#0F1E35] text-white hover:bg-[#162a4a]" :disabled="uploadingPhoto || cameraActive">
+                📷 Buka kamera
+              </UiButton>
+              <UiButton size="sm" @click="triggerCameraFileInput" class="h-10 flex-1 lg:flex-none bg-white border border-[#E8DDC7] text-[#0F1E35]" :disabled="uploadingPhoto || cameraActive">
+                📱 Kamera HP
+              </UiButton>
+              <UiButton v-if="photoModalProduct.foto" variant="secondary" size="sm" @click="deletePhotoFromModal" class="h-10 flex-1 lg:flex-none" :disabled="cameraActive">🗑️ Hapus foto</UiButton>
               <UiButton variant="secondary" size="sm" @click="closePhotoModal" class="h-10 flex-1 lg:flex-none">Tutup</UiButton>
             </div>
-            <div class="text-[10px] text-gray-500">Unggah foto (JPG/PNG/WEBP max 5MB).</div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-2 text-[11px] mt-2">
-              <div class="bg-[#FFFBF2] rounded-[8px] px-2.5 py-2 border border-[#F0E6D2]"><span class="text-gray-500">Stock:</span> <span class="font-bold">{{ photoModalProduct.stock }} / {{ photoModalProduct.batas_stock }}</span></div>
-              <div class="bg-[#FFFBF2] rounded-[8px] px-2.5 py-2 border border-[#F0E6D2]"><span class="text-gray-500">Lokasi:</span> <span class="font-bold">Box {{ photoModalProduct.nomor_box }} Laci {{ photoModalProduct.nomor_laci }}</span></div>
-              <div class="bg-[#FFFBF2] rounded-[8px] px-2.5 py-2 border border-[#F0E6D2]"><span class="text-gray-500">Total:</span> <span class="font-bold">Rp{{ Number(photoModalProduct.harga * photoModalProduct.stock).toLocaleString('id-ID') }}</span></div>
+            <div class="text-[10px] text-gray-500 leading-tight">Pilih File = browse. Buka kamera = webcam (butuh HTTPS/localhost). Kamera HP = native camera input (works di HTTP / mobile).</div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] mt-2">
+              <div class="bg-white lg:bg-[#FFFBF2] rounded-[10px] px-3 py-2.5 border border-[#E8DDC7] lg:border-[#F0E6D2] shadow-sm lg:shadow-none">
+                <div class="text-[9px] uppercase tracking-wide text-gray-500 font-bold">Harga Satuan</div>
+                <div class="font-mono font-extrabold text-[13px] text-[#0F1E35] mt-0.5">Rp{{ Number(photoModalProduct.harga).toLocaleString('id-ID') }}</div>
+                <div class="text-[10px] text-gray-500 mt-0.5">per pcs</div>
+              </div>
+              <div class="bg-[#FFFBF2] rounded-[10px] px-3 py-2.5 border border-[#F0E6D2]">
+                <div class="text-[9px] uppercase tracking-wide text-gray-500 font-bold">Stock</div>
+                <div class="font-bold text-[13px] mt-0.5">{{ photoModalProduct.stock }} <span class="text-gray-400 text-[11px]">/ {{ photoModalProduct.batas_stock }}</span></div>
+                <div class="text-[10px] mt-0.5" :class="photoModalProduct.stock <= photoModalProduct.batas_stock ? 'text-red-600 font-bold' : 'text-gray-500'">{{ photoModalProduct.stock <= photoModalProduct.batas_stock ? '⚠️ Rendah' : '✅ Aman' }}</div>
+              </div>
+              <div class="bg-[#FFFBF2] rounded-[10px] px-3 py-2.5 border border-[#F0E6D2]">
+                <div class="text-[9px] uppercase tracking-wide text-gray-500 font-bold">Lokasi</div>
+                <div class="font-bold text-[12px] mt-0.5">Box {{ photoModalProduct.nomor_box }} • Laci {{ photoModalProduct.nomor_laci }}</div>
+                <div class="text-[10px] text-gray-500 mt-0.5 truncate">{{ photoModalProduct.kategori }}</div>
+              </div>
+              <div class="bg-[#0F1E35] rounded-[10px] px-3 py-2.5 border border-[#0F1E35] text-white">
+                <div class="text-[9px] uppercase tracking-wide text-white/60 font-bold">Total Value</div>
+                <div class="font-mono font-extrabold text-[13px] mt-0.5">Rp{{ Number(photoModalProduct.harga * photoModalProduct.stock).toLocaleString('id-ID') }}</div>
+                <div class="text-[10px] text-white/60 mt-0.5">{{ photoModalProduct.stock }} × Rp{{ Number(photoModalProduct.harga).toLocaleString('id-ID') }}</div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -272,7 +328,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { productService, categoryService, locationService, getPhotoUrl } from '../services/api'
 import Card from '../components/ui/Card.vue'
 import CardHeader from '../components/ui/CardHeader.vue'
@@ -306,7 +362,18 @@ const uploadingPhoto = ref(false)
 // Direct quick upload refs
 const quickUploadInput = ref(null)
 const modalUploadInput = ref(null)
+const cameraFileInput = ref(null)
 const quickPhotoProductId = ref(null)
+
+// Camera refs and state
+const cameraVideo = ref(null)
+const cameraCanvas = ref(null)
+const cameraActive = ref(false)
+const cameraError = ref('')
+const cameraFacing = ref('environment') // environment or user
+const capturedPreview = ref(null)
+const capturedBlob = ref(null)
+let cameraStream = null
 
 const form = reactive({ nama:'', kategori:'', keterangan_barang:'', nomor_box:'', nomor_laci:'', harga:0, stock:0, batas_stock:10 })
 const stockForm = reactive({ type:'in', quantity:1, reason:'' })
@@ -466,8 +533,30 @@ const onQuickPhotoSelected = async (e) => {
   finally { uploadingPhoto.value=false; e.target.value=''; quickPhotoProductId.value=null }
 }
 
-const openPhotoModal = (p) => { photoModalProduct.value = p }
-const closePhotoModal = () => { photoModalProduct.value = null }
+const openPhotoModal = (p) => {
+  photoModalProduct.value = p
+  // Reset camera state when opening modal
+  capturedPreview.value = null
+  capturedBlob.value = null
+  cameraActive.value = false
+  cameraError.value = ''
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t=>t.stop())
+    cameraStream = null
+  }
+}
+const closePhotoModal = () => {
+  // Cleanup camera
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t=>t.stop())
+    cameraStream = null
+  }
+  cameraActive.value = false
+  cameraError.value = ''
+  capturedPreview.value = null
+  capturedBlob.value = null
+  photoModalProduct.value = null
+}
 const triggerModalUpload = () => {
   if (modalUploadInput.value) modalUploadInput.value.click()
 }
@@ -489,5 +578,176 @@ const deletePhotoFromModal = async () => {
   if (!confirm('Hapus foto ini?')) return
   try { await productService.deletePhoto(photoModalProduct.value.id); alert('Foto dihapus'); photoModalProduct.value.foto=null; fetchProducts(); closePhotoModal() } catch(e){ alert(e.response?.data?.error||e.message) }
 }
+
+// Camera logic - robust for localhost HTTPS requirement
+const openCamera = async () => {
+  cameraError.value = ''
+  capturedPreview.value = null
+  capturedBlob.value = null
+
+  // Check secure context - getUserMedia requires HTTPS or localhost, not 192.168.x on http
+  const isSecure = window.isSecureContext
+  const isLocalhost = ['localhost','127.0.0.1'].includes(window.location.hostname)
+  if (!isSecure && !isLocalhost) {
+    // HTTP LAN – getUserMedia blocked by browser. Auto fallback to native camera input which works on HTTP
+    cameraError.value = `Anda di ${window.location.hostname} via HTTP. Browser blokir webcam (butuh HTTPS). Membuka Kamera HP native...`
+    // Directly open native file picker with capture
+    if (cameraFileInput.value) {
+      cameraFileInput.value.click()
+    }
+    return
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    cameraError.value = 'Browser tidak support webcam. Membuka Kamera HP native...'
+    if (cameraFileInput.value) cameraFileInput.value.click()
+    return
+  }
+
+  cameraActive.value = true
+  await nextTick()
+  await new Promise(r=>setTimeout(r,150))
+
+  try {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t=>t.stop())
+      cameraStream = null
+    }
+    // Try with facingMode first, fallback without if fails
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: cameraFacing.value, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      })
+    } catch(e) {
+      console.warn('facingMode failed, trying generic', e)
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    }
+    cameraStream = stream
+    if (cameraVideo.value) {
+      cameraVideo.value.srcObject = stream
+      // Explicit muted and playsinline required for iOS
+      cameraVideo.value.muted = true
+      cameraVideo.value.playsInline = true
+      try {
+        await cameraVideo.value.play()
+      } catch(playErr) {
+        console.warn('video play failed, but stream set', playErr)
+      }
+    }
+  } catch(err) {
+    console.error('Camera error', err)
+    let msg = err.message || err.name
+    if (err.name === 'NotAllowedError') msg = 'Izin kamera ditolak. Cek pengaturan browser.'
+    if (err.name === 'NotFoundError') msg = 'Kamera tidak ditemukan.'
+    if (err.name === 'NotSecureError' || err.name === 'SecurityError') msg = 'Butuh HTTPS - fallback ke Kamera HP.'
+    cameraError.value = 'Gagal akses kamera: ' + msg + '. Membuka Kamera HP native...'
+    cameraActive.value = false
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t=>t.stop())
+      cameraStream = null
+    }
+    // Auto fallback to native input which works on HTTP
+    if (cameraFileInput.value) {
+      setTimeout(()=>cameraFileInput.value.click(), 300)
+    }
+  }
+}
+
+const closeCamera = () => {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t=>t.stop())
+    cameraStream = null
+  }
+  cameraActive.value = false
+  // don't clear error so user sees why it failed
+}
+
+const switchCamera = async () => {
+  cameraFacing.value = cameraFacing.value === 'environment' ? 'user' : 'environment'
+  if (cameraActive.value) {
+    await openCamera()
+  }
+}
+
+const capturePhoto = () => {
+  if (!cameraVideo.value || !cameraCanvas.value) {
+    cameraError.value = 'Video belum siap'
+    return
+  }
+  const video = cameraVideo.value
+  const canvas = cameraCanvas.value
+  const w = video.videoWidth || 640
+  const h = video.videoHeight || 480
+  if (w === 0 || h === 0) {
+    cameraError.value = 'Video belum ready, coba lagi'
+    return
+  }
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  // Mirror for user facing? keep simple
+  if (cameraFacing.value === 'user') {
+    ctx.translate(w, 0)
+    ctx.scale(-1, 1)
+  }
+  ctx.drawImage(video, 0, 0, w, h)
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      cameraError.value = 'Gagal mengambil foto'
+      return
+    }
+    if (capturedPreview.value) URL.revokeObjectURL(capturedPreview.value)
+    capturedBlob.value = blob
+    capturedPreview.value = URL.createObjectURL(blob)
+    closeCamera()
+  }, 'image/jpeg', 0.92)
+}
+
+const retakePhoto = () => {
+  if (capturedPreview.value) URL.revokeObjectURL(capturedPreview.value)
+  capturedPreview.value = null
+  capturedBlob.value = null
+  openCamera()
+}
+
+const uploadCapturedPhoto = async () => {
+  if (!capturedBlob.value || !photoModalProduct.value) return
+  if (capturedBlob.value.size > 5*1024*1024) { alert('Hasil foto terlalu besar >5MB'); return }
+  uploadingPhoto.value = true
+  try {
+    const file = new File([capturedBlob.value], `camera_${photoModalProduct.value.id}_${Date.now()}.jpg`, { type: 'image/jpeg' })
+    const res = await productService.uploadPhoto(photoModalProduct.value.id, file)
+    alert('Foto dari kamera berhasil di-upload')
+    photoModalProduct.value = res.data.data
+    if (capturedPreview.value) URL.revokeObjectURL(capturedPreview.value)
+    capturedPreview.value = null
+    capturedBlob.value = null
+    fetchProducts()
+  } catch(err) {
+    alert(err.response?.data?.error || err.message)
+  } finally {
+    uploadingPhoto.value = false
+  }
+}
+
+const triggerCameraFileInput = () => {
+  if (cameraFileInput.value) cameraFileInput.value.click()
+}
+
+const onCameraFileSelected = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  if (file.size > 5*1024*1024) { alert('File terlalu besar max 5MB'); e.target.value=''; return }
+  // Show preview then auto upload? We'll show preview first like camera capture
+  capturedBlob.value = file
+  if (capturedPreview.value) URL.revokeObjectURL(capturedPreview.value)
+  capturedPreview.value = URL.createObjectURL(file)
+  // Optionally auto upload? Keep manual for user confirmation
+  // Clear file input
+  e.target.value = ''
+}
+
 const onImgError = (e) => { e.target.style.display='none' }
 </script>

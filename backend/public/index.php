@@ -68,7 +68,39 @@ error_reporting(E_ALL);
 $debugRaw = $_ENV['APP_DEBUG'] ?? $_SERVER['APP_DEBUG'] ?? getenv('APP_DEBUG') ?: 'false';
 $debug = $debugRaw === 'true' || $debugRaw === true || $debugRaw === '1';
 ini_set('display_errors', $debug ? '1' : '0');
+ini_set('log_errors', '1');
+
+// Global exception handler to return JSON instead of blank 500
+set_exception_handler(function($e) {
+    $isDebug = ($_ENV['APP_DEBUG'] ?? $_SERVER['APP_DEBUG'] ?? getenv('APP_DEBUG') ?: 'false') === 'true';
+    error_log('Uncaught exception: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    http_response_code(500);
+    header('Content-Type: application/json');
+    if ($isDebug) {
+        echo json_encode([
+            'error' => 'Internal server error: ' . $e->getMessage(),
+            'file' => $e->getFile() . ':' . $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString())
+        ], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo json_encode(['error' => 'Internal server error'], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+});
 
 // Load routes and dispatch
-$router = require __DIR__ . '/../src/Routes/api.php';
-$router->dispatch();
+try {
+    $router = require __DIR__ . '/../src/Routes/api.php';
+    $router->dispatch();
+} catch (Throwable $e) {
+    $isDebug = ($_ENV['APP_DEBUG'] ?? $_SERVER['APP_DEBUG'] ?? getenv('APP_DEBUG') ?: 'false') === 'true';
+    error_log('Dispatch error: ' . $e->getMessage());
+    http_response_code(500);
+    header('Content-Type: application/json');
+    if ($isDebug) {
+        echo json_encode(['error' => $e->getMessage(), 'file' => $e->getFile().':'.$e->getLine()], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo json_encode(['error' => 'Internal server error'], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}

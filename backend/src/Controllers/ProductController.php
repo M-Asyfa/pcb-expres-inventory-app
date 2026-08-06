@@ -118,8 +118,9 @@ class ProductController {
             $out['nomor_laci'] = trim((string)$out['nomor_laci']);
             if ($out['nomor_laci'] === '') $out['nomor_laci'] = '1';
         }
-        if (isset($out['nama']) && mb_strlen($out['nama']) > 500) {
-            Response::error('Nama too long (max 500)', 422);
+        if (isset($out['nama'])) {
+            $len = function_exists('mb_strlen') ? mb_strlen($out['nama']) : strlen($out['nama']);
+            if ($len > 500) Response::error('Nama too long (max 500)', 422);
         }
         return $out;
     }

@@ -2,8 +2,18 @@ import axios from 'axios'
 
 const token = import.meta.env.VITE_API_TOKEN || localStorage.getItem('api_token') || ''
 
+// Resolve API base: use env if set, otherwise use relative /api which goes via Vite proxy
+// This fixes ERR_CONNECTION_REFUSED on other PCs: previously hardcoded localhost:8000 failed on LAN
+// When browser is at http://192.168.1.10:5173, /api is http://192.168.1.10:5173/api -> proxied to backend
+function resolveApiBase() {
+  const env = import.meta.env.VITE_API_URL
+  if (env && env.trim() !== '') return env.trim()
+  // Default to relative proxy for dev (works for localhost and LAN)
+  return '/api'
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  baseURL: resolveApiBase(),
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -62,9 +72,25 @@ export const productService = {
 export const getPhotoUrl = (foto) => {
   if (!foto) return null
   if (foto.startsWith('http')) return foto
-  const base = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api\/?$/, '')
   const clean = foto.replace(/^\//, '')
-  return `${base}/${clean}`
+
+  // If foto already has uploads/ prefix, keep it
+  const env = import.meta.env.VITE_API_URL || ''
+  // If env is absolute http, use its host
+  if (env && env.startsWith('http')) {
+    const base = env.replace(/\/api\/?$/, '')
+    return `${base}/${clean}`
+  }
+  // Otherwise we are using proxy mode (/api). For images, use relative /uploads via proxy
+  // Vite proxies /uploads to backend, so /uploads/xyz works for LAN
+  // This avoids needing to know backend port/host
+  if (clean.startsWith('uploads/')) {
+    return `/${clean}`
+  }
+  // Fallback: absolute via same hostname but backend port 8000 (for direct backend access)
+  const protocol = window.location.protocol
+  const hostname = window.location.hostname
+  return `${protocol}//${hostname}:8000/${clean}`
 }
 
 export const categoryService = {

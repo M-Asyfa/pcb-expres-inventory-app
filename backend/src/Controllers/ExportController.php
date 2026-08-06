@@ -159,7 +159,8 @@ class ExportController {
 
                 if (!$nama) continue;
                 $nama = trim((string)$nama);
-                if ($nama === '' || mb_strlen($nama) > 500) continue;
+                $len = function_exists('mb_strlen') ? mb_strlen($nama) : strlen($nama);
+                if ($nama === '' || $len > 500) continue;
 
                 // Sanitize: remove CSV formula injection leading chars =,+,-,@, but keep negative numbers for stock? We disallow formula.
                 // If field starts with = + - @ and second char is letter or quote, strip leading char.
