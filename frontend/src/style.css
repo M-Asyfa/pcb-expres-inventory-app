@@ -3,9 +3,27 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
   body {
     @apply bg-[#FAF6EE] text-[#0F172A] antialiased;
     font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    @apply text-[13px] lg:text-[14px];
+  }
+  /* Improve touch targets on mobile */
+  button, a, select, input {
+    @apply touch-manipulation;
+  }
+  /* Prevent iOS zoom on input focus */
+  @media (max-width: 1024px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    input[type="text"], input[type="number"] {
+      font-size: 14px !important;
+    }
   }
 }
 
