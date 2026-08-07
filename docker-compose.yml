@@ -11,9 +11,10 @@ services:
       - "${DB_EXTERNAL_PORT:-3306}:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
-      # Real data dump is gitignored; if you have it locally, import manually: docker exec -i db mariadb -u root -proot inventory_pcbexpressjogja < database/inventory_pcbexpressjogja.sql
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
-      - ./database/real_indexes.sql:/docker-entrypoint-initdb.d/002_real_indexes.sql
+      # Only canonical schema init – creates data_barang with foto + indexes
+      # inventory_pcbexpressjogja.sql is optional seed (gitignored), import manually:
+      # docker exec -i db mariadb -u root -proot inventory_pcbexpressjogja < database/inventory_pcbexpressjogja.sql
+      - ./database/001_real_schema.sql:/docker-entrypoint-initdb.d/001_real_schema.sql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -45,6 +46,10 @@ services:
       bash -c "
       a2enmod rewrite headers &&
       docker-php-ext-install pdo pdo_mysql mbstring &&
+      echo 'upload_max_filesize=15M' > /usr/local/etc/php/conf.d/uploads.ini &&
+      echo 'post_max_size=20M' >> /usr/local/etc/php/conf.d/uploads.ini &&
+      echo 'max_file_uploads=20' >> /usr/local/etc/php/conf.d/uploads.ini &&
+      echo 'memory_limit=256M' >> /usr/local/etc/php/conf.d/uploads.ini &&
       echo 'ServerName localhost' >> /etc/apache2/apache2.conf &&
       if ! command -v composer >/dev/null 2>&1; then
         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer;

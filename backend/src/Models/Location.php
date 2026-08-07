@@ -32,8 +32,21 @@ class Location {
     public static function getLaciByBox(string $box): array {
         $pdo = Database::getConnection();
         $box = trim($box);
-        $stmt = $pdo->prepare("SELECT TRIM(nomor_laci) as id, TRIM(nomor_laci) as name, TRIM(nomor_laci) as nomor_laci, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box GROUP BY TRIM(nomor_laci) ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED)");
-        $stmt->execute(['box'=>$box]);
+        $boxInt = is_numeric($box) ? (int)$box : null;
+        if ($boxInt !== null) {
+            // Match both exact trimmed string and numeric equivalent (handles "01" vs "1", "84 " vs "84")
+            $stmt = $pdo->prepare("
+                SELECT TRIM(nomor_laci) as id, TRIM(nomor_laci) as name, TRIM(nomor_laci) as nomor_laci, COUNT(*) as product_count
+                FROM data_barang
+                WHERE TRIM(nomor_box) = :box OR CAST(TRIM(nomor_box) AS UNSIGNED) = :boxInt
+                GROUP BY TRIM(nomor_laci)
+                ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED)
+            ");
+            $stmt->execute(['box'=>$box,'boxInt'=>$boxInt]);
+        } else {
+            $stmt = $pdo->prepare("SELECT TRIM(nomor_laci) as id, TRIM(nomor_laci) as name, TRIM(nomor_laci) as nomor_laci, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box GROUP BY TRIM(nomor_laci) ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED)");
+            $stmt->execute(['box'=>$box]);
+        }
         return $stmt->fetchAll();
     }
 
@@ -44,12 +57,32 @@ class Location {
         if (count($parts) >= 2) {
             $box = trim($parts[0]);
             $laci = trim($parts[1]);
-            $stmt = $pdo->prepare("SELECT CONCAT(TRIM(nomor_box),'-',TRIM(nomor_laci)) as id, TRIM(nomor_box) as nomor_box, TRIM(nomor_laci) as nomor_laci, CONCAT('Box ',TRIM(nomor_box),' Laci ',TRIM(nomor_laci)) as name, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box AND TRIM(nomor_laci) = :laci GROUP BY TRIM(nomor_box), TRIM(nomor_laci)");
-            $stmt->execute(['box'=>$box,'laci'=>$laci]);
+            $boxInt = is_numeric($box) ? (int)$box : null;
+            $laciInt = is_numeric($laci) ? (int)$laci : null;
+            if ($boxInt !== null && $laciInt !== null) {
+                $stmt = $pdo->prepare("
+                    SELECT CONCAT(TRIM(nomor_box),'-',TRIM(nomor_laci)) as id, TRIM(nomor_box) as nomor_box, TRIM(nomor_laci) as nomor_laci, CONCAT('Box ',TRIM(nomor_box),' Laci ',TRIM(nomor_laci)) as name, COUNT(*) as product_count, COALESCE(SUM(stock),0) as total_stock
+                    FROM data_barang
+                    WHERE (TRIM(nomor_box) = :box OR CAST(TRIM(nomor_box) AS UNSIGNED) = :boxInt)
+                      AND (TRIM(nomor_laci) = :laci OR CAST(TRIM(nomor_laci) AS UNSIGNED) = :laciInt)
+                    GROUP BY TRIM(nomor_box), TRIM(nomor_laci)
+                ");
+                $stmt->execute(['box'=>$box,'boxInt'=>$boxInt,'laci'=>$laci,'laciInt'=>$laciInt]);
+            } else {
+                $stmt = $pdo->prepare("SELECT CONCAT(TRIM(nomor_box),'-',TRIM(nomor_laci)) as id, TRIM(nomor_box) as nomor_box, TRIM(nomor_laci) as nomor_laci, CONCAT('Box ',TRIM(nomor_box),' Laci ',TRIM(nomor_laci)) as name, COUNT(*) as product_count, COALESCE(SUM(stock),0) as total_stock FROM data_barang WHERE TRIM(nomor_box) = :box AND TRIM(nomor_laci) = :laci GROUP BY TRIM(nomor_box), TRIM(nomor_laci)");
+                $stmt->execute(['box'=>$box,'laci'=>$laci]);
+            }
             return $stmt->fetch() ?: null;
         }
-        $stmt = $pdo->prepare("SELECT TRIM(nomor_box) as id, TRIM(nomor_box) as name, TRIM(nomor_box) as nomor_box, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box GROUP BY TRIM(nomor_box)");
-        $stmt->execute(['box'=>$id]);
+        $box = $id;
+        $boxInt = is_numeric($box) ? (int)$box : null;
+        if ($boxInt !== null) {
+            $stmt = $pdo->prepare("SELECT TRIM(nomor_box) as id, TRIM(nomor_box) as name, TRIM(nomor_box) as nomor_box, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box OR CAST(TRIM(nomor_box) AS UNSIGNED) = :boxInt GROUP BY TRIM(nomor_box)");
+            $stmt->execute(['box'=>$box,'boxInt'=>$boxInt]);
+        } else {
+            $stmt = $pdo->prepare("SELECT TRIM(nomor_box) as id, TRIM(nomor_box) as name, TRIM(nomor_box) as nomor_box, COUNT(*) as product_count FROM data_barang WHERE TRIM(nomor_box) = :box GROUP BY TRIM(nomor_box)");
+            $stmt->execute(['box'=>$box]);
+        }
         return $stmt->fetch() ?: null;
     }
 
@@ -103,13 +136,50 @@ class Location {
         $pdo = Database::getConnection();
         $box = trim($box);
         $laci = $laci !== null ? trim($laci) : null;
-        if ($laci) {
-            $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE TRIM(nomor_box) = :b AND TRIM(nomor_laci) = :l ORDER BY nama");
-            $stmt->execute(['b'=>$box,'l'=>$laci]);
+        $boxInt = is_numeric($box) ? (int)$box : null;
+        $laciInt = $laci !== null && is_numeric($laci) ? (int)$laci : null;
+
+        // Fix: some show nothing because of leading zeros like "01" vs "1" or spaces "84 " vs "84"
+        // We match both exact trimmed and numeric equivalent
+        if ($laci !== null && $laci !== '') {
+            if ($boxInt !== null && $laciInt !== null) {
+                // Numeric fallback: matches "1" = "01" = " 1 "
+                $stmt = $pdo->prepare("
+                    SELECT * FROM data_barang
+                    WHERE (TRIM(nomor_box) = :b OR CAST(TRIM(nomor_box) AS UNSIGNED) = :bInt)
+                      AND (TRIM(nomor_laci) = :l OR CAST(TRIM(nomor_laci) AS UNSIGNED) = :lInt)
+                    ORDER BY nama
+                ");
+                $stmt->execute(['b'=>$box,'bInt'=>$boxInt,'l'=>$laci,'lInt'=>$laciInt]);
+            } else {
+                $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE TRIM(nomor_box) = :b AND TRIM(nomor_laci) = :l ORDER BY nama");
+                $stmt->execute(['b'=>$box,'l'=>$laci]);
+            }
+            $rows = $stmt->fetchAll();
+            // If still empty, try looser search (handles hidden chars)
+            if (empty($rows)) {
+                $stmt2 = $pdo->prepare("
+                    SELECT * FROM data_barang
+                    WHERE TRIM(nomor_box) LIKE :bLike AND TRIM(nomor_laci) LIKE :lLike
+                    ORDER BY nama
+                ");
+                $stmt2->execute(['bLike'=>'%'.$box.'%','lLike'=>'%'.$laci.'%']);
+                $rows = $stmt2->fetchAll();
+            }
+            return $rows;
         } else {
-            $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE TRIM(nomor_box) = :b ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED), nama");
-            $stmt->execute(['b'=>$box]);
+            if ($boxInt !== null) {
+                $stmt = $pdo->prepare("
+                    SELECT * FROM data_barang
+                    WHERE TRIM(nomor_box) = :b OR CAST(TRIM(nomor_box) AS UNSIGNED) = :bInt
+                    ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED), nama
+                ");
+                $stmt->execute(['b'=>$box,'bInt'=>$boxInt]);
+            } else {
+                $stmt = $pdo->prepare("SELECT * FROM data_barang WHERE TRIM(nomor_box) = :b ORDER BY CAST(TRIM(nomor_laci) AS UNSIGNED), nama");
+                $stmt->execute(['b'=>$box]);
+            }
+            return $stmt->fetchAll();
         }
-        return $stmt->fetchAll();
     }
 }

@@ -140,7 +140,7 @@ const sortBy = (k)=>{ if(sortKey.value===k) sortAsc.value=!sortAsc.value; else {
 const close = () => { showForm.value=false; editing.value=null; form.name='' }
 const save = async () => { try{ if(editing.value) await categoryService.update(editing.value.kategori,{name:form.name}); else await categoryService.create({name:form.name}); close(); fetch() } catch(e){ alert(e.response?.data?.error||e.message) } }
 const edit = (c)=>{ editing.value=c; form.name=c.kategori; showForm.value=true }
-const remove = async (id)=>{ if(confirm(`Hapus kategori ${id}? Barang tetap ada tapi kategori jadi kosong.`)){ try{ await categoryService.delete(id); fetch() } catch(e){ alert(e.response?.data?.error||e.message) } } }
+const remove = async (id)=>{ if(confirm(`Hapus kategori ${id}? Barang tetap ada tapi kategori jadi Lain-lain.`)){ try{ await categoryService.delete(id); fetch() } catch(e){ alert(e.response?.data?.error||e.message) } } }
 const exportCsv = () => {
   const csv = ['kategori,product_count,total_stock,total_value']
   filtered.value.forEach(c=>{ csv.push(`"${c.kategori}",${c.product_count},${c.total_stock},${c.total_value||0}`) })

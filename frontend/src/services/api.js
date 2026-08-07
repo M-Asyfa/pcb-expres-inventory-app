@@ -96,21 +96,29 @@ export const getPhotoUrl = (foto) => {
 export const categoryService = {
   getAll() { return api.get('/categories') },
   getStats() { return api.get('/categories/stats') },
+  getOne(id) { return api.get(`/categories/${encodeURIComponent(id)}`) },
   create(data) { return api.post('/categories', data) },
-  update(id, data) { return api.put(`/categories/${id}`, data) },
-  delete(id) { return api.delete(`/categories/${id}`) }
+  update(id, data) { return api.put(`/categories/${encodeURIComponent(id)}`, data) },
+  delete(id) { return api.delete(`/categories/${encodeURIComponent(id)}`) }
 }
 
 export const locationService = {
   getAll(type='full') { return api.get('/locations', { params: { type } }) },
   getBoxes() { return api.get('/locations/boxes') },
-  getLaciByBox(box) { return api.get(`/locations/box/${box}`) },
-  getProducts(box, laci=null) { 
-    if (laci) return api.get(`/locations/box/${box}/laci/${laci}`)
-    return api.get(`/locations/box/${box}`)
+  getLaciByBox(box) { 
+    const b = encodeURIComponent(String(box).trim())
+    return api.get(`/locations/box/${b}`) 
   },
-  getOne(id) { return api.get(`/locations/${id}`) },
+  getProducts(box, laci=null) { 
+    const b = encodeURIComponent(String(box).trim())
+    if (laci !== null && laci !== undefined && String(laci).trim() !== '') {
+      const l = encodeURIComponent(String(laci).trim())
+      return api.get(`/locations/box/${b}/laci/${l}`)
+    }
+    return api.get(`/locations/box/${b}`)
+  },
+  getOne(id) { return api.get(`/locations/${encodeURIComponent(id)}`) },
   create(data) { return api.post('/locations', data) },
-  update(id, data) { return api.put(`/locations/${id}`, data) },
-  delete(id) { return api.delete(`/locations/${id}`) }
+  update(id, data) { return api.put(`/locations/${encodeURIComponent(id)}`, data) },
+  delete(id) { return api.delete(`/locations/${encodeURIComponent(id)}`) }
 }

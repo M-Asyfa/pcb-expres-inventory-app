@@ -3,13 +3,11 @@
     <div v-if="loading" class="text-gray-500 py-12 text-center text-sm">Memuat statistik...</div>
 
     <div v-else>
-      <!-- 4 cards responsive -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5 mb-4 lg:mb-6">
         <div class="relative bg-white rounded-[16px] lg:rounded-[20px] border border-[#F0E6D2] border-l-[4px] border-l-[#4e73df] p-3 lg:p-5 flex justify-between items-center shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
           <div class="min-w-0 flex-1">
             <div class="text-[9px] lg:text-[10px] font-bold text-[#4e73df] uppercase truncate">Total Stock Inventory</div>
             <div class="text-[18px] lg:text-[22px] font-extrabold text-[#0F172A] mt-1">{{ stats.total_quantity || 0 }}</div>
-            <div class="text-[10px] text-gray-500 lg:hidden mt-0.5">pcs total</div>
           </div>
           <div class="text-[#dddfeb] text-xl lg:text-2xl">📦</div>
         </div>
@@ -31,14 +29,12 @@
           <div class="min-w-0 flex-1">
             <div class="text-[9px] lg:text-[10px] font-bold text-[#f6c23e] uppercase truncate">This Day In Out</div>
             <div class="text-[12px] lg:text-[14px] font-extrabold text-[#0F172A] mt-1">▲ {{ dayInOut.in }} ▼ {{ dayInOut.out }}</div>
-            <div class="text-[10px] text-gray-500 lg:hidden">pergerakan</div>
           </div>
           <div class="text-[#dddfeb] text-xl">✔</div>
         </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
-        <!-- Donut -->
         <div class="bg-white rounded-[16px] lg:rounded-[20px] border border-[#F0E6D2] shadow-[0_4px_20px_rgba(0,0,0,0.04)] overflow-hidden">
           <div class="px-4 lg:px-6 py-3 lg:py-4 bg-[#FFFBF2] border-b border-[#F0E6D2] flex justify-between items-center">
             <span class="font-bold text-[12px] lg:text-[13px] text-[#0F1E35]">% Total Item dari Kategori</span>
@@ -65,7 +61,7 @@
           </div>
         </div>
 
-        <!-- Low stock -->
+        <!-- Low stock with fixed pagination -->
         <div class="bg-white rounded-[16px] lg:rounded-[20px] border border-[#F0E6D2] shadow-[0_4px_20px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
           <div class="px-4 lg:px-6 py-3 lg:py-4 bg-[#FFFBF2] border-b border-[#F0E6D2] font-bold text-[12px] lg:text-[13px] text-[#0F1E35] flex justify-between items-center">
             <span>Stock item dibawah target</span>
@@ -74,28 +70,54 @@
           <div class="p-3 lg:p-4 flex-1 flex flex-col">
             <div class="flex flex-col lg:flex-row justify-between gap-2 mb-3 text-[11px] lg:text-[12px]">
               <div class="flex gap-2 items-center">Show
-                <select v-model="lowPerPage" class="border border-[#E8DDC7] rounded-[8px] px-2 py-1.5 text-xs bg-white h-8">
-                  <option :value="10">10</option><option :value="25">25</option>
+                <select v-model="lowPerPage" class="border border-[#E8DDC7] rounded-[8px] px-2 py-1.5 text-xs bg-white h-9">
+                  <option :value="10">10</option><option :value="25">25</option><option :value="50">50</option>
                 </select> entries
               </div>
-              <div class="flex gap-2 items-center flex-1 lg:flex-none">Search: <input v-model="lowSearch" placeholder="Cari..." class="border border-[#E8DDC7] rounded-[8px] px-2 py-1.5 text-xs flex-1 lg:w-36 h-8" /></div>
+              <div class="flex gap-2 items-center flex-1 lg:flex-none">Search: <input v-model="lowSearch" placeholder="Cari ID/Nama..." class="border border-[#E8DDC7] rounded-[8px] px-3 py-1.5 text-xs flex-1 lg:w-44 h-9" /></div>
             </div>
-            <div class="border border-[#F5EFE4] rounded-xl overflow-auto flex-1 max-h-[320px] lg:max-h-[320px]">
+
+            <div class="border border-[#F5EFE4] rounded-xl overflow-auto flex-1 min-h-[200px] max-h-[360px]">
               <table class="w-full text-[11px] lg:text-[12px]">
-                <thead class="bg-[#FFFBF2] sticky top-0"><tr class="border-b"><th class="py-2.5 px-3 text-left font-bold">ID ▲</th><th class="text-left font-bold">Nama</th><th class="text-right pr-4 font-bold">Banyak ↕</th></tr></thead>
+                <thead class="bg-[#FFFBF2] sticky top-0 z-10">
+                  <tr class="border-b text-[#0F172A]">
+                    <th class="py-2.5 px-3 text-left font-bold cursor-pointer whitespace-nowrap hover:bg-[#F3EBD9]" @click="sortByLow('id')">
+                      ID <span :class="sortKey==='id' ? 'text-[#0F1E35]' : 'text-[#E8DDC7]'">{{ sortKey==='id' ? (sortAsc ? '▲' : '▼') : '↕' }}</span>
+                    </th>
+                    <th class="py-2.5 text-left font-bold cursor-pointer whitespace-nowrap hover:bg-[#F3EBD9]" @click="sortByLow('nama')">
+                      Nama <span :class="sortKey==='nama' ? 'text-[#0F1E35]' : 'text-[#E8DDC7]'">{{ sortKey==='nama' ? (sortAsc ? '▲' : '▼') : '↕' }}</span>
+                    </th>
+                    <th class="py-2.5 pr-4 text-right font-bold cursor-pointer whitespace-nowrap hover:bg-[#F3EBD9]" @click="sortByLow('stock')">
+                      Banyak <span :class="sortKey==='stock' ? 'text-[#0F1E35]' : 'text-[#E8DDC7]'">{{ sortKey==='stock' ? (sortAsc ? '▲' : '▼') : '↕' }}</span>
+                    </th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <tr v-for="p in pagedLowStock" :key="p.id" class="border-b last:border-0 hover:bg-[#FFFBF2]">
+                  <tr v-for="p in pagedLowStock" :key="p.id" class="border-b last:border-0 hover:bg-[#FFFBF2] transition">
                     <td class="py-2.5 px-3 font-mono text-[10px] lg:text-[11px]">{{ p.id }}</td>
-                    <td class="py-2.5 max-w-[140px] lg:max-w-[180px] truncate font-medium">{{ p.nama }}</td>
+                    <td class="py-2.5 max-w-[160px] lg:max-w-[200px] truncate font-medium" :title="p.nama">{{ p.nama }}</td>
                     <td class="py-2.5 pr-4 text-right font-bold text-red-600">{{ p.stock }}</td>
                   </tr>
-                  <tr v-if="filteredLow.length===0"><td colspan="3" class="py-10 text-center text-gray-400">Tidak ada data low stock</td></tr>
+                  <tr v-if="filteredLow.length===0"><td colspan="3" class="py-12 text-center text-gray-400">Tidak ada data low stock</td></tr>
                 </tbody>
               </table>
             </div>
-            <div class="flex justify-between mt-3 text-[11px] text-gray-500">
-              <span>Showing {{ pagedLowStock.length }} of {{ filteredLow.length }}</span>
-              <div class="flex gap-1"><button @click="lowPage=Math.max(1,lowPage-1)" class="px-3 py-1.5 border rounded-[8px] bg-white h-8">Prev</button><span class="px-3 py-1.5 bg-[#0F1E35] text-white rounded-[8px] h-8 flex items-center">{{ lowPage }}</span><button @click="lowPage++" class="px-3 py-1.5 border rounded-[8px] bg-white h-8">Next</button></div>
+
+            <!-- Fixed pagination -->
+            <div class="flex flex-col lg:flex-row justify-between gap-2 mt-3 text-[11px]">
+              <div class="text-gray-500 text-[10px] lg:text-[11px] order-2 lg:order-1">
+                Showing {{ showingFrom }} to {{ showingTo }} of {{ filteredLow.length }} • Page {{ lowPage }}/{{ lowTotalPages }}
+              </div>
+              <div class="flex gap-1 items-center justify-center order-1 lg:order-2 flex-wrap">
+                <button @click="goLowPage(1)" :disabled="lowPage<=1" class="px-2 py-1.5 border rounded-[8px] bg-white h-8 disabled:opacity-40">«</button>
+                <button @click="goLowPage(lowPage-1)" :disabled="lowPage<=1" class="px-3 py-1.5 border rounded-[8px] bg-white h-8 disabled:opacity-40">‹ Prev</button>
+                <template v-for="pg in visibleLowPages" :key="pg">
+                  <button v-if="pg!=='...'" @click="goLowPage(pg)" :class="['w-8 h-8 rounded-[8px] text-[11px] font-bold border', pg===lowPage ? 'bg-[#0F1E35] text-white border-[#0F1E35]' : 'bg-white border-[#E8DDC7] hover:bg-[#FFFBF2]']">{{ pg }}</button>
+                  <span v-else class="px-1 text-gray-400">...</span>
+                </template>
+                <button @click="goLowPage(lowPage+1)" :disabled="lowPage>=lowTotalPages" class="px-3 py-1.5 border rounded-[8px] bg-white h-8 disabled:opacity-40">Next ›</button>
+                <button @click="goLowPage(lowTotalPages)" :disabled="lowPage>=lowTotalPages" class="px-2 py-1.5 border rounded-[8px] bg-white h-8 disabled:opacity-40">»</button>
+              </div>
             </div>
           </div>
         </div>
@@ -119,7 +141,7 @@ let donutChart = null
 const lowSearch = ref('')
 const lowPerPage = ref(10)
 const lowPage = ref(1)
-const sortKey = ref('id')
+const sortKey = ref('stock')
 const sortAsc = ref(true)
 const dayInOut = ref({ in: 0, out: 0 })
 
@@ -129,31 +151,70 @@ const filteredLow = computed(()=>{
   let list = lowStock.value
   if (lowSearch.value) {
     const s = lowSearch.value.toLowerCase()
-    list = list.filter(p=> p.nama.toLowerCase().includes(s) || String(p.id).includes(s))
+    list = list.filter(p=> (p.nama||'').toLowerCase().includes(s) || String(p.id).toLowerCase().includes(s))
   }
   list = [...list].sort((a,b)=>{
     const k = sortKey.value
-    if (a[k] < b[k]) return sortAsc.value ? -1 : 1
-    if (a[k] > b[k]) return sortAsc.value ? 1 : -1
-    return 0
+    let av = a[k], bv = b[k]
+    if (k==='nama') {
+      av = (av||'').toLowerCase(); bv = (bv||'').toLowerCase()
+      return sortAsc.value ? av.localeCompare(bv) : bv.localeCompare(av)
+    }
+    // numeric
+    av = Number(av) || 0; bv = Number(bv) || 0
+    return sortAsc.value ? av-bv : bv-av
   })
   return list
 })
+
+const lowTotalPages = computed(()=> Math.max(1, Math.ceil(filteredLow.value.length / lowPerPage.value)))
 
 const pagedLowStock = computed(()=>{
   const start = (lowPage.value-1)*lowPerPage.value
   return filteredLow.value.slice(start, start+lowPerPage.value)
 })
 
+const showingFrom = computed(()=> filteredLow.value.length===0 ? 0 : (lowPage.value-1)*lowPerPage.value + 1)
+const showingTo = computed(()=> Math.min(lowPage.value*lowPerPage.value, filteredLow.value.length))
+
+const visibleLowPages = computed(()=>{
+  const total = lowTotalPages.value, cur = lowPage.value
+  if (total <= 5) return Array.from({length: total}, (_,i)=>i+1)
+  const pages = [1]
+  if (cur > 3) pages.push('...')
+  for (let i=Math.max(2, cur-1); i<=Math.min(total-1, cur+1); i++) pages.push(i)
+  if (cur < total-2) pages.push('...')
+  pages.push(total)
+  return pages
+})
+
 const totalCat = computed(()=> catStats.value.reduce((a,c)=> a + (parseInt(c.product_count)||0), 0))
 
-watch([lowSearch, lowPerPage], ()=>{ lowPage.value=1 })
+watch([lowSearch, lowPerPage], ()=>{
+  lowPage.value = 1
+})
+
+watch(lowTotalPages, (newTotal)=>{
+  if (lowPage.value > newTotal) lowPage.value = Math.max(1, newTotal)
+})
+
+const goLowPage = (p) => {
+  if (p === '...') return
+  const total = lowTotalPages.value
+  if (p < 1) p = 1
+  if (p > total) p = total
+  lowPage.value = p
+}
+
+const sortByLow = (k) => {
+  if (sortKey.value === k) sortAsc.value = !sortAsc.value
+  else { sortKey.value = k; sortAsc.value = k==='nama' ? true : false }
+}
 
 const renderDonut = async () => {
   await nextTick()
   const canvas = donutCanvas.value
-  if (!canvas) return
-  if (catStats.value.length===0) return
+  if (!canvas || catStats.value.length===0) return
   try {
     const { Chart, ArcElement, Tooltip, Legend, DoughnutController } = await import('chart.js')
     Chart.register(ArcElement, Tooltip, Legend, DoughnutController)
@@ -162,21 +223,8 @@ const renderDonut = async () => {
     const data = catStats.value.map(c=> parseInt(c.product_count) || 0)
     donutChart = new Chart(canvas, {
       type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{
-          data,
-          backgroundColor: donutColors.slice(0, data.length),
-          borderWidth: 2,
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        cutout: '68%',
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => { const total = ctx.dataset.data.reduce((a,b)=>a+b,0); const pct = total ? ((ctx.parsed/total)*100).toFixed(1) : 0; return `${ctx.label}: ${ctx.parsed} (${pct}%)` } } } }
-      }
+      data: { labels, datasets: [{ data, backgroundColor: donutColors.slice(0, data.length), borderWidth: 2, borderColor: '#fff' }] },
+      options: { responsive: true, maintainAspectRatio: true, cutout: '68%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => { const total = ctx.dataset.data.reduce((a,b)=>a+b,0); const pct = total ? ((ctx.parsed/total)*100).toFixed(1) : 0; return `${ctx.label}: ${ctx.parsed} (${pct}%)` } } } } }
     })
   } catch (e) { console.error(e) }
 }
@@ -186,21 +234,35 @@ const reloadCategories = async () => {
     const res = await productService.getCategoriesStats()
     catStats.value = res.data.data
     await nextTick(); renderDonut()
-  } catch (e) { console.error(e); alert('Gagal load kategori: ' + e.message) }
+  } catch (e) { alert('Gagal load kategori: ' + e.message) }
 }
 
 onMounted(async () => {
   try {
-    const [statsRes, lowRes, catRes, boxRes] = await Promise.all([
+    const [statsRes, lowRes, catRes, boxRes, logsRes] = await Promise.all([
       productService.getStats(),
       productService.getLowStock(),
       productService.getCategoriesStats().catch(()=> ({data:{data:[]}})),
-      productService.getBoxesStats()
+      productService.getBoxesStats(),
+      productService.getLogs().catch(()=> ({data:{data:[]}}))
     ])
     stats.value = statsRes.data.data
-    lowStock.value = lowRes.data.data
+    lowStock.value = lowRes.data.data || []
     catStats.value = catRes.data.data || []
     boxStats.value = boxRes.data.data || []
+    // Calculate day in/out from logs
+    try {
+      const logs = logsRes.data.data || []
+      const today = new Date().toISOString().slice(0,10)
+      let inC=0, outC=0
+      logs.forEach(l=>{
+        const w = String(l.waktu||'').slice(0,10)
+        if (w !== today) return
+        if (Number(l.stock) > 0) inC++
+        else if (Number(l.stock) < 0) outC++
+      })
+      dayInOut.value = { in: inC, out: outC }
+    } catch {}
     await nextTick(); setTimeout(renderDonut, 300)
   } catch (e) { console.error(e) } finally { loading.value = false }
 })

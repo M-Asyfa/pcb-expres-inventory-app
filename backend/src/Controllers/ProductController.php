@@ -84,8 +84,7 @@ class ProductController {
         Response::json(['data' => Product::getBoxesStats()]);
     }
 
-    private function sanitizeInput(array $input): array {
-        // Trim strings and normalize
+    private function sanitizeInput(array $input, bool $isUpdate = false): array {
         $out = [];
         foreach ($input as $k => $v) {
             if (is_string($v)) {
@@ -94,7 +93,6 @@ class ProductController {
                 $out[$k] = $v;
             }
         }
-        // Ensure numeric fields are valid ints
         foreach (['harga','stock','batas_stock'] as $numField) {
             if (isset($out[$numField])) {
                 if (!is_numeric($out[$numField])) {
@@ -109,18 +107,49 @@ class ProductController {
                 }
             }
         }
-        // Normalize box/laci - trim spaces, remove empty
-        if (isset($out['nomor_box'])) {
-            $out['nomor_box'] = trim((string)$out['nomor_box']);
-            if ($out['nomor_box'] === '') $out['nomor_box'] = '0';
+
+        // No Box: required on create, optional on update but cannot be blank if provided
+        if (array_key_exists('nomor_box', $out)) {
+            $boxVal = trim((string)$out['nomor_box']);
+            if ($boxVal === '') {
+                Response::error('Field nomor_box is required (No Box tidak boleh kosong)', 422);
+            }
+            if (strlen($boxVal) > 50) Response::error('Field nomor_box too long (max 50)', 422);
+            $out['nomor_box'] = $boxVal;
+        } elseif (!$isUpdate) {
+            Response::error('Field nomor_box is required (No Box tidak boleh kosong)', 422);
         }
-        if (isset($out['nomor_laci'])) {
-            $out['nomor_laci'] = trim((string)$out['nomor_laci']);
-            if ($out['nomor_laci'] === '') $out['nomor_laci'] = '1';
+
+        // No Laci: can be blank -> auto 1
+        if (array_key_exists('nomor_laci', $out)) {
+            $laciRaw = trim((string)$out['nomor_laci']);
+            if ($laciRaw === '') {
+                $out['nomor_laci'] = '1';
+            } else {
+                if (strlen($laciRaw) > 50) Response::error('Field nomor_laci too long (max 50)', 422);
+                $out['nomor_laci'] = $laciRaw;
+            }
+        } elseif (!$isUpdate) {
+            // on create, blank auto 1
+            $out['nomor_laci'] = '1';
         }
+
+        // Kategori: required on create, optional on update but cannot be blank if provided
+        if (array_key_exists('kategori', $out)) {
+            $kat = trim((string)$out['kategori']);
+            if ($kat === '') {
+                Response::error('Field kategori is required (Kategori tidak boleh kosong)', 422);
+            }
+            if (strlen($kat) > 200) Response::error('Kategori too long', 422);
+            $out['kategori'] = $kat;
+        } elseif (!$isUpdate) {
+            Response::error('Field kategori is required (Kategori tidak boleh kosong)', 422);
+        }
+
         if (isset($out['nama'])) {
             $len = function_exists('mb_strlen') ? mb_strlen($out['nama']) : strlen($out['nama']);
             if ($len > 500) Response::error('Nama too long (max 500)', 422);
+            if (trim($out['nama']) === '') Response::error('Nama tidak boleh kosong', 422);
         }
         return $out;
     }
@@ -129,14 +158,22 @@ class ProductController {
         $input = json_decode(file_get_contents('php://input'), true);
         if (!$input) Response::error('Invalid JSON', 400);
 
-        $required = ['nama'];
+        // nama, nomor_box, kategori required – nomor_laci can be blank auto 1
+        $required = ['nama','nomor_box','kategori'];
         foreach ($required as $field) {
-            if (empty($input[$field]) || (is_string($input[$field]) && trim($input[$field]) === '')) {
-                Response::error("Field $field is required", 422);
+            if (!array_key_exists($field, $input)) {
+                Response::error("Field $field is required (tidak boleh kosong)", 422);
+            }
+            $v = $input[$field];
+            if (is_string($v) && trim($v) === '') {
+                Response::error("Field $field is required (tidak boleh kosong)", 422);
+            }
+            if ($v === null || $v === '') {
+                Response::error("Field $field is required (tidak boleh kosong)", 422);
             }
         }
 
-        $input = $this->sanitizeInput($input);
+        $input = $this->sanitizeInput($input, false);
         $id = Product::create($input);
         $product = Product::find($id);
         Response::json(['data' => $product, 'message' => 'Barang created'], 201);
@@ -149,7 +186,7 @@ class ProductController {
         $input = json_decode(file_get_contents('php://input'), true);
         if (!$input) Response::error('Invalid JSON', 400);
 
-        $input = $this->sanitizeInput($input);
+        $input = $this->sanitizeInput($input, true);
         Product::update($id, $input);
         Response::json(['data' => Product::find($id), 'message' => 'Barang updated']);
     }
@@ -215,10 +252,21 @@ class ProductController {
         $file = $_FILES['photo'] ?? $_FILES['foto'];
 
         if ($file['error'] !== UPLOAD_ERR_OK) {
-            Response::error('Upload error: ' . $file['error'], 400);
+            $mapErr = [
+                UPLOAD_ERR_INI_SIZE => 'File exceeds server upload_max_filesize (php.ini). Increase upload_max_filesize/post_max_size or compress image.',
+                UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE',
+                UPLOAD_ERR_PARTIAL => 'File only partially uploaded',
+                UPLOAD_ERR_NO_FILE => 'No file uploaded',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing temp folder',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write to disk',
+                UPLOAD_ERR_EXTENSION => 'Blocked by PHP extension'
+            ];
+            $msg = $mapErr[$file['error']] ?? ('Upload error code: ' . $file['error']);
+            Response::error('Upload error: ' . $msg, 400);
         }
-        if ($file['size'] > 5 * 1024 * 1024) {
-            Response::error('File too large max 5MB', 400);
+        // Allow up to 15M now (php.ini increased), but enforce 10M app limit
+        if ($file['size'] > 10 * 1024 * 1024) {
+            Response::error('File too large max 10MB (compressed), got ' . round($file['size']/1024/1024,2) . 'MB', 400);
         }
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);

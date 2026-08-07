@@ -35,16 +35,14 @@
     </Card>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
-      <!-- Daftar Lokasi -->
       <Card class="lg:col-span-2">
         <CardHeader class="flex flex-row justify-between items-center py-3 px-4">
           <div class="min-w-0">
             <CardTitle class="text-[13px]">Daftar Lokasi</CardTitle>
-            <CardDescription class="text-[11px] truncate">Kombinasi unik Box-Laci terpakai di gudang</CardDescription>
+            <CardDescription class="text-[11px] truncate">Kombinasi unik Box-Laci terpakai di gudang – tap View untuk modal</CardDescription>
           </div>
           <Badge variant="secondary" class="hidden lg:inline-flex">{{ filteredLocations.length }} lokasi</Badge>
         </CardHeader>
-        <!-- Desktop table -->
         <CardContent class="p-0 overflow-x-auto hidden lg:block">
           <table class="w-full text-[11px]">
             <thead class="border-b border-[#E8DDC7] bg-[#FFFBF2]">
@@ -70,7 +68,6 @@
             </tbody>
           </table>
         </CardContent>
-        <!-- Mobile cards -->
         <CardContent class="p-3 lg:hidden space-y-2">
           <div v-for="l in pagedLocations" :key="l.id" class="bg-[#FFFBF2] border border-[#F0E6D2] rounded-[12px] p-3 flex justify-between items-center">
             <div class="min-w-0 flex-1">
@@ -128,47 +125,62 @@
       </Card>
     </div>
 
-    <Card v-if="selectedLocation" class="mt-4 lg:mt-5">
-      <CardHeader class="flex flex-row justify-between items-center px-4 py-3">
-        <div class="min-w-0">
-          <CardTitle class="text-[13px] truncate">Barang di {{ selectedLocation.name }}</CardTitle>
-          <CardDescription class="text-[11px]">{{ selectedProducts.length }} jenis • Box {{ selectedLocation.nomor_box }} Laci {{ selectedLocation.nomor_laci }}</CardDescription>
-        </div>
-        <UiButton variant="secondary" size="sm" @click="selectedLocation=null" class="rounded-[8px] h-8 flex-shrink-0">Tutup</UiButton>
-      </CardHeader>
-      <CardContent class="p-0 overflow-x-auto">
-        <!-- Desktop -->
-        <table class="w-full text-[11px] hidden lg:table">
-          <thead class="border-b bg-[#FFFBF2] text-[10px] tracking-wide text-gray-500 font-bold">
-            <tr><th class="py-2.5 px-4 text-left">ID</th><th class="text-left">Name / Nama</th><th class="text-left">Kategori</th><th class="text-left">Stock Total</th><th class="text-left">Harga (Rp)</th><th class="text-left">Total Value (Rp)</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in selectedProducts" :key="p.id" class="border-b hover:bg-[#FFFBF2]">
-              <td class="py-2.5 px-4 font-mono">{{ p.id }}</td>
-              <td class="font-semibold max-w-[200px] truncate" :title="p.nama">{{ p.nama }}</td>
-              <td><Badge variant="blue">{{ p.kategori }}</Badge></td>
-              <td :class="p.stock<=p.batas_stock?'text-red-600 font-bold':''">{{ p.stock }}</td>
-              <td class="font-mono">Rp{{ Number(p.harga).toLocaleString('id-ID') }}</td>
-              <td class="font-mono font-bold">Rp{{ Number(p.harga * p.stock).toLocaleString('id-ID') }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <!-- Mobile -->
-        <div class="lg:hidden p-3 space-y-2">
-          <div v-for="p in selectedProducts" :key="p.id" class="border border-[#F0E6D2] rounded-[12px] p-3 bg-[#FFFBF2]/50">
-            <div class="flex justify-between gap-2">
-              <div class="font-bold text-[12px] truncate flex-1">{{ p.nama }}</div>
-              <div class="font-mono text-[10px] text-gray-500">#{{ p.id }}</div>
-            </div>
-            <div class="mt-1 flex flex-wrap gap-1">
-              <Badge variant="blue" class="text-[10px]">{{ p.kategori }}</Badge>
-              <span class="text-[10px] px-2 py-1 bg-white border border-[#E8DDC7] rounded-full">Stok {{ p.stock }}</span>
-              <span class="text-[10px] px-2 py-1 bg-white border border-[#E8DDC7] rounded-full font-mono">Rp{{ Number(p.harga).toLocaleString('id-ID') }}</span>
-            </div>
+    <!-- Modal for location products -->
+    <div v-if="showModal && selectedLocation" class="fixed inset-0 bg-[#0F1E35]/40 backdrop-blur-sm flex items-end lg:items-center justify-center p-0 lg:p-4 z-50" @click.self="closeModal">
+      <Card class="w-full max-w-4xl max-h-[92vh] lg:max-h-[90vh] overflow-auto rounded-t-[20px] lg:rounded-[20px] flex flex-col">
+        <CardHeader class="flex flex-row justify-between items-center px-4 py-3 sticky top-0 bg-white z-10 border-b border-[#F0E6D2]">
+          <div class="min-w-0">
+            <CardTitle class="text-[14px] truncate">Barang di {{ selectedLocation.name }}</CardTitle>
+            <CardDescription class="text-[11px]">{{ loadingDetail ? 'Memuat...' : (selectedProducts.length + ' jenis • Box ' + selectedLocation.nomor_box + ' Laci ' + selectedLocation.nomor_laci) }}</CardDescription>
           </div>
+          <div class="flex gap-2 flex-shrink-0">
+            <UiButton variant="secondary" size="sm" @click="closeModal" class="rounded-[8px] h-9">✕ Tutup</UiButton>
+          </div>
+        </CardHeader>
+        <CardContent class="p-0 overflow-auto flex-1">
+          <div v-if="loadingDetail" class="py-16 text-center text-[13px] text-gray-500">Memuat barang di {{ selectedLocation.name }}...</div>
+          <template v-else>
+            <div class="hidden lg:block overflow-x-auto">
+              <table class="w-full text-[11px]">
+                <thead class="border-b bg-[#FFFBF2] text-[10px] tracking-wide text-gray-500 font-bold sticky top-0">
+                  <tr><th class="py-2.5 px-4 text-left">ID</th><th class="text-left">Name / Nama</th><th class="text-left">Kategori</th><th class="text-left">Stock</th><th class="text-left">Harga (Rp)</th><th class="text-left">Total Value (Rp)</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="p in selectedProducts" :key="p.id" class="border-b hover:bg-[#FFFBF2]">
+                    <td class="py-2.5 px-4 font-mono">{{ p.id }}</td>
+                    <td class="font-semibold max-w-[260px] truncate" :title="p.nama">{{ p.nama }}</td>
+                    <td><Badge variant="blue">{{ p.kategori }}</Badge></td>
+                    <td :class="p.stock<=p.batas_stock?'text-red-600 font-bold':''">{{ p.stock }}</td>
+                    <td class="font-mono">Rp{{ Number(p.harga).toLocaleString('id-ID') }}</td>
+                    <td class="font-mono font-bold">Rp{{ Number(p.harga * p.stock).toLocaleString('id-ID') }}</td>
+                  </tr>
+                  <tr v-if="selectedProducts.length===0"><td colspan="6" class="py-12 text-center text-gray-400">Tidak ada barang di lokasi ini</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="lg:hidden p-3 space-y-2">
+              <div v-for="p in selectedProducts" :key="p.id" class="border border-[#F0E6D2] rounded-[12px] p-3 bg-[#FFFBF2]/50">
+                <div class="flex justify-between gap-2">
+                  <div class="font-bold text-[13px] truncate flex-1">{{ p.nama }}</div>
+                  <div class="font-mono text-[10px] text-gray-500">#{{ p.id }}</div>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                  <Badge variant="blue" class="text-[10px]">{{ p.kategori }}</Badge>
+                  <span class="text-[11px] px-2 py-1 bg-white border border-[#E8DDC7] rounded-full">Stok {{ p.stock }}</span>
+                  <span class="text-[11px] px-2 py-1 bg-white border border-[#E8DDC7] rounded-full font-mono">Rp{{ Number(p.harga).toLocaleString('id-ID') }}</span>
+                </div>
+                <div class="text-[10px] text-gray-500 mt-1.5">Total: <span class="font-bold text-[#0F1E35]">Rp{{ Number(p.harga * p.stock).toLocaleString('id-ID') }}</span></div>
+              </div>
+              <div v-if="selectedProducts.length===0" class="py-10 text-center text-gray-400 text-[12px]">Tidak ada barang di lokasi ini</div>
+            </div>
+          </template>
+        </CardContent>
+        <div class="p-3 border-t border-[#F0E6D2] flex justify-end gap-2 bg-[#FFFBF2]/50">
+          <UiButton variant="secondary" @click="closeModal" class="h-10">Tutup</UiButton>
+          <UiButton @click="exportDetailCsv" class="h-10 text-[12px]">📥 Export CSV lokasi ini</UiButton>
         </div>
-      </CardContent>
-    </Card>
+      </Card>
+    </div>
   </div>
 </template>
 
@@ -194,11 +206,19 @@ const perPage = ref(50)
 const currentPage = ref(1)
 const sortKey = ref('box')
 const sortAsc = ref(true)
+const showModal = ref(false)
+const loadingDetail = ref(false)
 
 const fetch = async () => {
-  const [locRes, boxRes] = await Promise.all([locationService.getAll('full'), locationService.getBoxes()])
-  locations.value = locRes.data.data
-  boxes.value = boxRes.data.data
+  try {
+    const [locRes, boxRes] = await Promise.all([locationService.getAll('full'), locationService.getBoxes()])
+    locations.value = locRes.data.data
+    boxes.value = boxRes.data.data
+  } catch(e) {
+    console.error('fetch locations failed', e)
+    const msg = e.response?.data?.error || e.message
+    alert('Gagal load lokasi: ' + msg)
+  }
 }
 onMounted(fetch)
 watch([search, boxFilter], ()=>{ currentPage.value=1 })
@@ -223,20 +243,54 @@ const totalPages = computed(()=> Math.max(1, Math.ceil(filteredLocations.value.l
 const pagedLocations = computed(()=> { const start=(currentPage.value-1)*perPage.value; return filteredLocations.value.slice(start,start+perPage.value) })
 const totalJenis = computed(()=> filteredLocations.value.reduce((s,l)=> s + (parseInt(l.product_count)||0), 0))
 const getLaciCount = (box) => locations.value.filter(l=> String(l.nomor_box)===String(box)).length
+
 const viewProducts = async (loc) => {
   selectedLocation.value = loc
-  const res = await locationService.getProducts(loc.nomor_box, loc.nomor_laci)
-  selectedProducts.value = res.data.data
-  // scroll to detail on mobile
-  if (window.innerWidth < 1024) {
-    setTimeout(()=>{ document.querySelector('[class*=\"mt-4\"]')?.scrollIntoView({behavior:'smooth'}) }, 100)
+  selectedProducts.value = []
+  showModal.value = true
+  loadingDetail.value = true
+  try {
+    const res = await locationService.getProducts(loc.nomor_box, loc.nomor_laci)
+    selectedProducts.value = res.data.data || []
+  } catch(e) {
+    console.error('viewProducts failed', e)
+    const msg = e.response?.data?.error || e.message || 'Gagal load barang di lokasi ini'
+    alert(`Gagal buka Box ${loc.nomor_box} Laci ${loc.nomor_laci}: ${msg}`)
+  } finally {
+    loadingDetail.value = false
   }
 }
+
+const closeModal = () => {
+  showModal.value = false
+  // keep selectedLocation for a moment for animation, then clear? we clear after close
+  setTimeout(()=>{
+    if (!showModal.value) { selectedLocation.value = null; selectedProducts.value = [] }
+  }, 200)
+}
+
 const filterByBox = (box)=>{ boxFilter.value=String(box); currentPage.value=1 }
 const sortBy = (k)=>{ if(sortKey.value===k) sortAsc.value=!sortAsc.value; else { sortKey.value=k; sortAsc.value=true } }
+
 const exportLocationsCsv = () => {
   const csv = ['No Box,No Laci,Nama Lokasi,Jumlah Jenis,Total Stock']
   filteredLocations.value.forEach(l=>{ csv.push(`${l.nomor_box},${l.nomor_laci},"${l.name}",${l.product_count},${l.total_stock||0}`) })
   const blob = new Blob([csv.join('\n')], {type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='box-laci.csv'; a.click(); URL.revokeObjectURL(url)
+}
+
+const exportDetailCsv = () => {
+  if (!selectedLocation.value) return
+  const loc = selectedLocation.value
+  const header = ['id','nama','kategori','nomor_box','nomor_laci','harga','stock','total_value']
+  const rows = [header.join(',')]
+  selectedProducts.value.forEach(p=>{
+    const total = p.harga * p.stock
+    rows.push([p.id, `"${(p.nama||'').replace(/"/g,'""')}"`, `"${(p.kategori||'').replace(/"/g,'""')}"`, p.nomor_box, p.nomor_laci, p.harga, p.stock, total].join(','))
+  })
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'})
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `box-${loc.nomor_box}-laci-${loc.nomor_laci}.csv`; a.click()
+  URL.revokeObjectURL(url)
 }
 </script>

@@ -11,7 +11,7 @@
       <div class="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-3">
         <div>
           <h1 class="text-[24px] lg:text-[32px] font-extrabold tracking-tight leading-none mt-1">Data Barang</h1>
-          <p class="text-[11px] lg:text-[12px] text-gray-500 mt-1">{{ meta.total }} jenis • Tap foto/📷 untuk buka modal • di modal langsung browse file</p>
+          <p class="text-[11px] lg:text-[12px] text-gray-500 mt-1">{{ meta.total }} jenis • Bahasa Indonesia</p>
         </div>
         <div class="flex gap-2 w-full lg:w-auto">
           <UiButton variant="secondary" @click="exportCsv" class="flex-1 lg:flex-none h-11 lg:h-10 text-[12px]">📥 Export</UiButton>
@@ -175,14 +175,31 @@
           <form @submit.prevent="saveProduct" class="space-y-3">
             <div><label class="text-[11px] font-bold">Name / Nama *</label><UiInput v-model="form.nama" placeholder="Nama barang" class="h-11 text-[14px]" /></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div><label class="text-[11px] font-bold">Kategori</label><input v-model="form.kategori" list="kat-list" placeholder="Kategori" class="h-11 rounded-[12px] border border-[var(--color-border)] px-3 text-[14px] w-full" /></div>
-              <div><label class="text-[11px] font-bold">Harga (Rp)</label><UiInput v-model="form.harga" type="number" class="h-11 text-[14px]" /></div>
+              <div>
+                <label class="text-[11px] font-bold">Kategori *</label>
+                <select v-model="form.kategori" required class="h-11 rounded-[12px] border border-[var(--color-border)] bg-white px-3 text-[14px] w-full">
+                  <option value="">Pilih Kategori *</option>
+                  <option v-for="c in categories" :key="c.kategori" :value="c.kategori">{{ c.kategori }} ({{ c.product_count }} jenis)</option>
+                </select>
+                <div v-if="categories.length===0" class="text-[10px] text-amber-700 mt-1">Belum ada kategori. Buat dulu di menu Kategori.</div>
+              </div>
+              <div><label class="text-[11px] font-bold">Harga (Rp) *</label><UiInput v-model="form.harga" type="number" required class="h-11 text-[14px]" /></div>
             </div>
-            <datalist id="kat-list"><option v-for="c in categories" :key="c.kategori" :value="c.kategori" /></datalist>
             <div><label class="text-[11px] font-bold">Keterangan</label><textarea v-model="form.keterangan_barang" placeholder="Keterangan" class="w-full rounded-[12px] border border-[var(--color-border)] p-3 text-[14px] min-h-[70px]"></textarea></div>
             <div class="grid grid-cols-2 gap-3">
-              <div><label class="text-[11px] font-bold">No Box</label><UiInput v-model="form.nomor_box" class="h-11 text-[14px]" inputmode="numeric" /></div>
-              <div><label class="text-[11px] font-bold">No Laci</label><UiInput v-model="form.nomor_laci" class="h-11 text-[14px]" inputmode="numeric" /></div>
+              <div>
+                <label class="text-[11px] font-bold">No Box *</label>
+                <UiInput v-model="form.nomor_box" required placeholder="Wajib, boleh 0, contoh: 1 atau RAK 83" class="h-11 text-[14px]" />
+              </div>
+              <div>
+                <label class="text-[11px] font-bold">No Laci <span class="font-normal text-gray-500">(kosong = auto 1)</span></label>
+                <UiInput v-model="form.nomor_laci" placeholder="Kosong otomatis 1" class="h-11 text-[14px]" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="space-y-1">
+              <div v-if="!form.nomor_box || !String(form.nomor_box).trim()" class="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded-[8px] px-2.5 py-1.5">No Box wajib diisi (boleh 0, tidak boleh kosong).</div>
+              <div v-if="!form.kategori || !String(form.kategori).trim()" class="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded-[8px] px-2.5 py-1.5">Kategori wajib dipilih, tidak boleh kosong.</div>
+              <div v-if="form.kategori" class="text-[10px] text-gray-500 bg-[#FFFBF2] border border-[#F0E6D2] rounded-[8px] px-2.5 py-1.5">Kategori: {{ form.kategori }} • No Laci kosong otomatis jadi 1.</div>
             </div>
             <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <div><label class="text-[11px] font-bold">Stock Total</label><UiInput v-model="form.stock" type="number" class="h-11 text-[14px]" /></div>
@@ -286,18 +303,15 @@
             <div v-if="cameraError" class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[8px] px-3 py-2">{{ cameraError }}</div>
             <div class="flex flex-wrap gap-2">
               <UiButton size="sm" @click="triggerModalUpload" class="h-10 flex-1 lg:flex-none" :disabled="uploadingPhoto || cameraActive">
-                {{ uploadingPhoto ? 'Uploading...' : (photoModalProduct.foto ? '🔄 Ganti Foto' : '📤 Pilih File') }}
+                {{ uploadingPhoto ? 'Uploading...' : (photoModalProduct.foto ? '🔄 Ganti Foto' : '📤 Pilih Foto') }}
               </UiButton>
               <UiButton size="sm" @click="openCamera" class="h-10 flex-1 lg:flex-none bg-[#0F1E35] text-white hover:bg-[#162a4a]" :disabled="uploadingPhoto || cameraActive">
                 📷 Buka kamera
               </UiButton>
-              <UiButton size="sm" @click="triggerCameraFileInput" class="h-10 flex-1 lg:flex-none bg-white border border-[#E8DDC7] text-[#0F1E35]" :disabled="uploadingPhoto || cameraActive">
-                📱 Kamera HP
-              </UiButton>
               <UiButton v-if="photoModalProduct.foto" variant="secondary" size="sm" @click="deletePhotoFromModal" class="h-10 flex-1 lg:flex-none" :disabled="cameraActive">🗑️ Hapus foto</UiButton>
               <UiButton variant="secondary" size="sm" @click="closePhotoModal" class="h-10 flex-1 lg:flex-none">Tutup</UiButton>
             </div>
-            <div class="text-[10px] text-gray-500 leading-tight">Pilih File = browse. Buka kamera = webcam (butuh HTTPS/localhost). Kamera HP = native camera input (works di HTTP / mobile).</div>
+            <div class="text-[10px] text-gray-500 leading-tight">Pilih Foto = ambil dari galeri. Buka kamera = akses kamera (desktop webcam & kamera HP) – di HTTP LAN otomatis fallback ke kamera native.</div>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] mt-2">
               <div class="bg-white lg:bg-[#FFFBF2] rounded-[10px] px-3 py-2.5 border border-[#E8DDC7] lg:border-[#F0E6D2] shadow-sm lg:shadow-none">
                 <div class="text-[9px] uppercase tracking-wide text-gray-500 font-bold">Harga Satuan</div>
@@ -382,6 +396,37 @@ let timer=null
 const debouncedFetch = ()=>{ clearTimeout(timer); timer=setTimeout(()=>{meta.value.page=1; fetchProducts()},350) }
 const resetAndFetch = ()=>{ meta.value.page=1; fetchProducts() }
 
+// Compress image on client to avoid UPLOAD_ERR_INI_SIZE (php.ini 2M default)
+// Reduces mobile camera 12MP (4-8MB) to ~300-800KB
+const compressImageFile = (file, maxW=1600, quality=0.82) => {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) { resolve(file); return }
+    // If already small < 1MB and not super large dimension, return as is
+    if (file.size < 1.2*1024*1024) { resolve(file); return }
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      let w = img.width, h = img.height
+      if (w > maxW || h > maxW) {
+        if (w > h) { h = Math.round(h * maxW / w); w = maxW }
+        else { w = Math.round(w * maxW / h); h = maxW }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      canvas.toBlob((blob) => {
+        if (!blob) { resolve(file); return }
+        const newFile = new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' })
+        resolve(newFile)
+      }, 'image/jpeg', quality)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
+
 const fetchProducts = async () => {
   const params = {
     page: meta.value.page,
@@ -444,10 +489,12 @@ const visiblePages = computed(()=>{
 })
 const goPage = (p)=>{ if(p<1||p>meta.value.total_pages) return; meta.value.page=p; fetchProducts(); window.scrollTo({top:0,behavior:'smooth'}) }
 const clearPhoto = () => { photoFile.value=null; photoPreview.value=null }
-const onPhotoSelect = (e) => {
-  const file = e.target.files[0]
+const onPhotoSelect = async (e) => {
+  let file = e.target.files[0]
   if (!file) return
-  if (file.size > 5*1024*1024) { alert('File terlalu besar max 5MB'); e.target.value=''; return }
+  // Compress on client to avoid PHP 2M limit
+  try { file = await compressImageFile(file) } catch {}
+  if (file.size > 10*1024*1024) { alert('File terlalu besar max 10MB'); e.target.value=''; return }
   photoFile.value = file
   const reader = new FileReader()
   reader.onload = (ev) => { photoPreview.value = ev.target.result }
@@ -460,6 +507,19 @@ const closeModal = ()=>{
 }
 const saveProduct = async () => {
   if (saving.value) return
+  // Kategori cannot be blank, No Box required, No Laci can be blank auto 1
+  if (!form.nama || !String(form.nama).trim()) { alert('Nama tidak boleh kosong'); return }
+  if (form.nomor_box === '' || form.nomor_box === null || String(form.nomor_box).trim() === '' ) {
+    alert('No Box tidak boleh kosong (boleh 0) – isi lokasi Box'); return
+  }
+  if (!form.kategori || !String(form.kategori).trim()) {
+    alert('Kategori tidak boleh kosong – pilih dari dropdown'); return
+  }
+  // Auto default No Laci to 1 if blank
+  if (!form.nomor_laci || String(form.nomor_laci).trim() === '') {
+    form.nomor_laci = '1'
+  }
+
   saving.value=true
   try{
     let savedId = editing.value?.id
@@ -519,11 +579,12 @@ const triggerQuickUpload = (p) => {
   if (quickUploadInput.value) quickUploadInput.value.click()
 }
 const onQuickPhotoSelected = async (e) => {
-  const file = e.target.files[0]
+  let file = e.target.files[0]
   if (!file) return
   const id = quickPhotoProductId.value
   if (!id) return
-  if (file.size > 5*1024*1024) { alert('File terlalu besar max 5MB'); e.target.value=''; return }
+  try { file = await compressImageFile(file) } catch {}
+  if (file.size > 10*1024*1024) { alert('File terlalu besar max 10MB'); e.target.value=''; return }
   uploadingPhoto.value = true
   try {
     await productService.uploadPhoto(id, file)
@@ -561,9 +622,10 @@ const triggerModalUpload = () => {
   if (modalUploadInput.value) modalUploadInput.value.click()
 }
 const onModalPhotoSelected = async (e) => {
-  const file = e.target.files[0]
+  let file = e.target.files[0]
   if (!file || !photoModalProduct.value) return
-  if (file.size > 5*1024*1024) { alert('File terlalu besar max 5MB'); e.target.value=''; return }
+  try { file = await compressImageFile(file) } catch {}
+  if (file.size > 10*1024*1024) { alert('File terlalu besar max 10MB'); e.target.value=''; return }
   uploadingPhoto.value = true
   try {
     const res = await productService.uploadPhoto(photoModalProduct.value.id, file)
@@ -714,10 +776,19 @@ const retakePhoto = () => {
 
 const uploadCapturedPhoto = async () => {
   if (!capturedBlob.value || !photoModalProduct.value) return
-  if (capturedBlob.value.size > 5*1024*1024) { alert('Hasil foto terlalu besar >5MB'); return }
+  // Compress captured blob too (just in case)
+  let blob = capturedBlob.value
+  if (blob.size > 1.5*1024*1024) {
+    try {
+      const tmpFile = new File([blob], 'tmp.jpg', { type: 'image/jpeg' })
+      const compressed = await compressImageFile(tmpFile, 1600, 0.8)
+      blob = compressed
+    } catch {}
+  }
+  if (blob.size > 10*1024*1024) { alert('Hasil foto terlalu besar >10MB'); return }
   uploadingPhoto.value = true
   try {
-    const file = new File([capturedBlob.value], `camera_${photoModalProduct.value.id}_${Date.now()}.jpg`, { type: 'image/jpeg' })
+    const file = blob instanceof File ? blob : new File([blob], `camera_${photoModalProduct.value.id}_${Date.now()}.jpg`, { type: 'image/jpeg' })
     const res = await productService.uploadPhoto(photoModalProduct.value.id, file)
     alert('Foto dari kamera berhasil di-upload')
     photoModalProduct.value = res.data.data
@@ -737,15 +808,13 @@ const triggerCameraFileInput = () => {
 }
 
 const onCameraFileSelected = async (e) => {
-  const file = e.target.files[0]
+  let file = e.target.files[0]
   if (!file) return
-  if (file.size > 5*1024*1024) { alert('File terlalu besar max 5MB'); e.target.value=''; return }
-  // Show preview then auto upload? We'll show preview first like camera capture
+  try { file = await compressImageFile(file, 1600, 0.82) } catch {}
+  if (file.size > 10*1024*1024) { alert('File terlalu besar max 10MB'); e.target.value=''; return }
   capturedBlob.value = file
   if (capturedPreview.value) URL.revokeObjectURL(capturedPreview.value)
   capturedPreview.value = URL.createObjectURL(file)
-  // Optionally auto upload? Keep manual for user confirmation
-  // Clear file input
   e.target.value = ''
 }
 

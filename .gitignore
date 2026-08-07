@@ -37,10 +37,12 @@ pnpm-debug.log*
 mariadb_data/
 mysql_data/
 data/
-# If you have local dumps with sensitive data, uncomment to ignore real dump
+# Real data dump – sensitive, local only
 database/inventory_pcbexpressjogja.sql
-# Keep schema as reference
-!database/schema.sql
+# Keep canonical real schema
+!database/001_real_schema.sql
+# Legacy normalized schema moved to docs/legacy_schema.sql for reference
+!docs/legacy_schema.sql
 # Product photos uploads (keep folder but ignore files)
 backend/public/uploads/*
 !backend/public/uploads/.gitkeep

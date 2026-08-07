@@ -52,5 +52,10 @@ CREATE INDEX IF NOT EXISTS idx_data_barang_batas_stock ON data_barang (batas_sto
 CREATE INDEX IF NOT EXISTS idx_log_stock_id ON log_stock (id);
 CREATE INDEX IF NOT EXISTS idx_log_stock_waktu ON log_stock (waktu);
 
--- Also ensure normalized demo DB exists for reference (from schema.sql)
+-- Ensure Lain-lain exists and clean empty kategori (fixes Capture2.PNG (empty) 0 counts)
+INSERT IGNORE INTO kategori (kategori) VALUES ('Lain-lain');
+UPDATE data_barang SET kategori='Lain-lain' WHERE kategori IS NULL OR TRIM(kategori)='';
+DELETE FROM kategori WHERE TRIM(kategori)='' OR kategori IS NULL;
+
+-- Also ensure normalized demo DB exists for reference (from schema.sql) – legacy
 CREATE DATABASE IF NOT EXISTS inventory_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
